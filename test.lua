@@ -1,18 +1,17 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v20)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v22)  
 
-    UPDATES (v20):  
-    - Modified the `.reset` command to explicitly use `game.PlaceId` for rejoining the server.  
+    UPDATES (v22):  
+    - Added `.spam` and `.unspam` commands to control continuous tool activation.  
+    - Added a `.say` command to have the player send a chat message.  
+    - Confirmed and ensured the `.reset` command consistently uses `game.PlaceId` for rejoining the server.  
 
     Previous Features:  
     - Fixed the .reset command to reliably rejoin the current server.  
     - Changed the connection keyword to "test".  
     - Added .equip and .unequip commands.  
-    - Corrected the `.cmds` output to display the proper list of commands without incorrect descriptions.  
-    - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.) back to the `.cmds` output.  
-    - `.cmds` command output now only shows command names, without descriptions.  
-    - Curated `.cmds` command list.  
-    - Added `.reset`, `.shop`, `.refresh`, `.to`, `.follow` commands.  
+    - Corrected the `.cmds` output to display the proper list of commands.  
+    - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.).  
     - Fixed critical execution and parsing errors.  
 ]]  
 
@@ -35,6 +34,7 @@ local FollowTarget = nil
 local MainConnector = nil  
 local ForceEquipConnection = nil  
 local HeartbeatConnection = nil  
+local SpammingEnabled = false  
 
 -- Configuration  
 local Dist = 0  
@@ -146,6 +146,13 @@ local function onHeartbeat()
             myHumanoid:MoveTo(targetPos)  
         end  
     end  
+    
+    if SpammingEnabled then  
+        local tool = LP.Character:FindFirstChildOfClass("Tool")  
+        if tool then  
+            pcall(function() tool:Activate() end)  
+        end  
+    end  
 
     for _, tool in ipairs(LP.Character:GetDescendants()) do  
         if tool:IsA("Tool") then  
@@ -238,21 +245,16 @@ local function serverHop()
 end  
 
 local function displayCommands()  
-    -- Corrected command list as per user feedback  
     local commandList = [[  
 Commands:  
-.loop  
-.unloop  
-.aura  
-.aura whitelist  
-.refresh  
-.reset  
-.follow  
-.unfollow  
-.to  
-.shop  
-.equip  
-.unequip  
+.loop, .unloop  
+.aura, .aura whitelist  
+.refresh, .reset  
+.follow, .unfollow  
+.to, .shop  
+.equip, .unequip  
+.spam, .unspam  
+.say  
 ]]  
     sendMessage(commandList)  
 end  
@@ -322,11 +324,7 @@ local function onMessageReceived(messageData)
         end  
     elseif command == ".follow" and arg2 then  
         local targetPlayer = findPlayer(arg2)  
-        if targetPlayer then  
-            FollowTarget = targetPlayer  
-        else  
-            FollowTarget = nil  
-        end  
+        if targetPlayer then FollowTarget = targetPlayer else FollowTarget = nil end  
     elseif command == ".unfollow" then  
         FollowTarget = nil  
     elseif command == ".cmds" then  
@@ -334,17 +332,21 @@ local function onMessageReceived(messageData)
     elseif command == ".equip" then  
         if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
             local tool = LP.Backpack:FindFirstChildWhichIsA("Tool")  
-            if tool then  
-                LP.Character.Humanoid:EquipTool(tool)  
-            end  
+            if tool then LP.Character.Humanoid:EquipTool(tool) end  
         end  
     elseif command == ".unequip" then  
         if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
             local tool = LP.Character:FindFirstChildWhichIsA("Tool")  
-            if tool then  
-                tool.Parent = LP.Backpack  
-            end  
+            if tool then tool.Parent = LP.Backpack end  
         end  
+    elseif command == ".spam" then  
+        SpammingEnabled = true  
+    elseif command == ".unspam" then  
+        SpammingEnabled = false  
+    elseif command == ".say" and arg2 then  
+        table.remove(args, 1)  
+        local message = table.concat(args, " ")  
+        sendMessage(message)  
     end  
 end  
 
@@ -386,5 +388,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v20)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v22)")  
 print("Floxy System Loaded. User Authorized.")
