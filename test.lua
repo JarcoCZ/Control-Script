@@ -1,18 +1,17 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v23)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v24)  
 
-    UPDATES (v23):  
-    - Modified the `.reset` command to be executable by any connected user, not just the script owner.  
-    - Added `.spam` and `.unspam` commands to control continuous tool activation.  
-    - Added a `.say` command to have the player send a chat message.  
+    UPDATES (v24):  
+    - Fixed a critical typo in the `.refresh` command ("HumanoidRootPpart" to "HumanoidRootPart") that prevented it from working.  
+    - Modified `.refresh` to be executable by any connected user.  
 
     Previous Features:  
+    - Modified the `.reset` command to be executable by any connected user.  
+    - Added `.spam` and `.unspam` commands.  
+    - Added a `.say` command.  
     - Fixed the .reset command to reliably rejoin the current server using game.PlaceId.  
     - Changed the connection keyword to "test".  
     - Added .equip and .unequip commands.  
-    - Corrected the `.cmds` output to display the proper list of commands.  
-    - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.).  
-    - Fixed critical execution and parsing errors.  
 ]]  
 
 -- Services  
@@ -312,8 +311,8 @@ local function onMessageReceived(messageData)
         TeleportService:Teleport(game.PlaceId, LP)  
     elseif command == ".shop" and authorPlayer == LP then  
         serverHop()  
-    elseif command == ".refresh" and authorPlayer == LP then  
-        if LP.Character and LP.Character:FindFirstChild("HumanoidRootPpart") then  
+    elseif command == ".refresh" then  
+        if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then  
             DeathPositions[LP.Name] = LP.Character.HumanoidRootPart.CFrame  
             LP.Character.Humanoid.Health = 0  
         end  
@@ -388,5 +387,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed Testing - Floxy (Fixed by luxx v23)")
+sendMessage("Script Executed Testing - Floxy (Fixed by luxx v24)")  
 print("Floxy System Loaded. User Authorized.")
