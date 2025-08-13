@@ -1,11 +1,10 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v33)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v34)  
 
-    UPDATES (v33):  
-    - Modified `.unsafe` to teleport the player to the MainConnector's position after removing the platform. If no connector is present, it will default to the previous spawn/reset behavior.  
+    UPDATES (v34):  
+    - Added `.kill [user]` command. This command will loop-attack a player until they die, then automatically unloop them.  
+    - Modified `.unsafe` to teleport the player to the MainConnector's position after removing the platform.  
     - Added `.unsafezone` command to stop the safezone loop.  
-    - Removed descriptive text from the `.cmds` output for a cleaner look.  
-    - Adjusted the delay in the `.cmds` function to 0.5 seconds between messages for improved reliability.  
     - Modified `.safezone` to be a loop, continuously teleporting the player above the target.  
     - Modified `.safe` command to continuously teleport the player upwards.  
 ]]  
@@ -225,14 +224,32 @@ local function removeTarget(playerName)
         for i, name in ipairs(Targets) do  
             if name == player.Name then table.remove(Targets, i); break end  
         end  
-        if #Targets == 0 then forceEquip(false) end  
+        if #Targets == 0 and not AuraEnabled then forceEquip(false) end  
     end  
+end  
+
+local function killOnce(playerName)  
+    local player = findPlayer(playerName)  
+    if not player or not player.Character or not player.Character:FindFirstChild("Humanoid") then return end  
+    
+    addTarget(playerName)  
+    
+    local humanoid = player.Character:FindFirstChild("Humanoid")  
+    local connection  
+    connection = humanoid.Died:Connect(function()  
+        sendMessage("Target " .. playerName .. " eliminated. Unlooping.")  
+        removeTarget(playerName)  
+        if connection then connection:Disconnect() end  
+    end)  
 end  
 
 local function setAura(range)  
     local newRange = tonumber(range)  
     if newRange and newRange >= 0 then  
-        Dist, AuraEnabled = newRange, newRange > 0  
+        Dist = newRange  
+        AuraEnabled = newRange > 0  
+        forceEquip(AuraEnabled or #Targets > 0)  
+        
         if LP.Character then  
             for _, tool in ipairs(LP.Character:GetDescendants()) do  
                 if tool:IsA("Tool") and tool:FindFirstChild("BoxReachPart") then  
@@ -260,9 +277,8 @@ end
 
 local function displayCommands()  
     local commandList_1 = [[  
-.loop [user], .unloop [user]  
-.aura [range], .unloop [user]  
-.aura whitelist [user], .aura unwhitelist [user]  
+.kill [user], .loop [user], .unloop [user]  
+.aura [range], .aura whitelist [user], .aura unwhitelist [user]  
 .to [user], .follow [user], .unfollow  
 ]]  
     local commandList_2 = [[  
@@ -272,7 +288,7 @@ local function displayCommands()
 .spam, .unspam, .say [msg]  
 ]]  
     sendMessage(commandList_1)  
-    task.wait(0.5) -- Adjusted delay  
+    task.wait(0.5)  
     sendMessage(commandList_2)  
 end  
 
@@ -292,7 +308,7 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    if command == "@" then  
+    if command == "test" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
@@ -317,6 +333,7 @@ local function onMessageReceived(messageData)
             end  
             sendMessage("Unconnected: " .. targetPlayer.Name)  
         end  
+    elseif command == ".kill" and arg2 then killOnce(arg2)  
     elseif command == ".loop" and arg2 then addTarget(arg2)  
     elseif command == ".unloop" and arg2 then removeTarget(arg2)  
     elseif command == ".aura" and arg2 then  
@@ -403,7 +420,7 @@ local function onMessageReceived(messageData)
                      LP.Character.Humanoid.Health = 0  
                 end  
             else  
-                LP.Character.Humanoid.Health = 0  
+                if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then LP.Character.Humanoid.Health = 0 end  
             end  
         end  
     elseif command == ".safezone" and arg2 then  
@@ -432,7 +449,7 @@ local function onCharacterAdded(char)
     for _, item in ipairs(char:GetChildren()) do createReachPart(item) end  
     char.ChildAdded:Connect(createReachPart)  
     
-    if #Targets > 0 then forceEquip(true) end  
+    if #Targets > 0 or AuraEnabled then forceEquip(true) end  
     
     if DeathPositions[LP.Name] then  
         local hrp = char:WaitForChild("HumanoidRootPart", 10)  
@@ -455,6 +472,7 @@ if LP.Character then onCharacterAdded(LP.Character) end
 
 Players.PlayerAdded:Connect(function(p) table.insert(PlayerList, p) end)  
 Players.PlayerRemoving:Connect(function(p)  
+    removeTarget(p.Name) -- Also remove them from targets if they leave  
     for i, pl in ipairs(PlayerList) do if pl == p then table.remove(PlayerList, i); break end end  
     for i, u in ipairs(ConnectedUsers) do if u == p then table.remove(ConnectedUsers, i); break end end  
     if p == FollowTarget then FollowTarget = nil; stopSafeZoneLoop() end  
@@ -468,5 +486,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v33)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v34)")  
 print("Floxy System Loaded. User Authorized.")
