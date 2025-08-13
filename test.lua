@@ -1,12 +1,12 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v28)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v29)  
 
-    UPDATES (v28):  
-    - Modified `.safe` command to continuously teleport the player upwards. The `.unsafe` command stops this and returns the player to a spawn point.  
+    UPDATES (v29):  
+    - Modified `.safezone` to be a loop, continuously teleporting the player above the target. Use `.unfollow` to cancel.  
+    - Modified `.safe` command to continuously teleport the player upwards.  
     - Split the `.cmds` command output into two messages for better readability.  
 
     Previous Features:  
-    - Added `.safezone [username]` command.  
     - Added `.safe` and `.unsafe` commands for a remote platform.  
     - Fixed a critical typo in the `.refresh` command.  
     - Modified `.refresh` and `.reset` to be executable by any connected user.  
@@ -36,6 +36,7 @@ local HeartbeatConnection = nil
 local SpammingEnabled = false  
 local safePlatform = nil -- Variable to hold our safe platform  
 local safeTeleportConnection = nil -- Connection for the safe teleport loop  
+local safeZoneConnection = nil -- Connection for the safe zone loop  
 
 -- Configuration  
 local Dist = 0  
@@ -43,6 +44,7 @@ local AuraEnabled = false
 local DMG_TIMES = 2  
 local FT_TIMES = 5  
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0) -- High up in the sky  
+local SAFE_ZONE_OFFSET = Vector3.new(0, 20, 0) -- Offset for the safezone command  
 
 -- Authorization  
 local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
@@ -185,6 +187,13 @@ end
 -- ==================================  
 -- ==      COMMANDS & CONTROLS     ==  
 -- ==================================  
+
+local function stopSafeZoneLoop()  
+    if safeZoneConnection and safeZoneConnection.Connected then  
+        safeZoneConnection:Disconnect()  
+        safeZoneConnection = nil  
+    end  
+end  
 
 local function forceEquip(shouldEquip)  
     if shouldEquip then  
@@ -340,6 +349,7 @@ local function onMessageReceived(messageData)
         if targetPlayer then FollowTarget = targetPlayer else FollowTarget = nil end  
     elseif command == ".unfollow" then  
         FollowTarget = nil  
+        stopSafeZoneLoop()  
     elseif command == ".cmds" then  
         displayCommands()  
     elseif command == ".equip" then  
@@ -399,10 +409,20 @@ local function onMessageReceived(messageData)
         end  
     elseif command == ".safezone" and arg2 then  
         local targetPlayer = findPlayer(arg2)  
-        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") and LP.Character then  
+        if not targetPlayer then return end  
+
+        stopSafeZoneLoop() -- Stop any previous loop  
+
+        safeZoneConnection = RunService.Heartbeat:Connect(function()  
+            if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then stopSafeZoneLoop(); return end  
+            if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then  
+                sendMessage("Safezone target lost. Disabling.")  
+                stopSafeZoneLoop()  
+                return  
+            end  
             local targetPos = targetPlayer.Character.HumanoidRootPart.Position  
-            teleportTo(LP.Character, targetPos + Vector3.new(0, 20, 0))  
-        end  
+            teleportTo(LP.Character, targetPos + SAFE_ZONE_OFFSET)  
+        end)  
     end  
 end  
 
@@ -436,7 +456,7 @@ Players.PlayerAdded:Connect(function(p) table.insert(PlayerList, p) end)
 Players.PlayerRemoving:Connect(function(p)  
     for i, pl in ipairs(PlayerList) do if pl == p then table.remove(PlayerList, i); break end end  
     for i, u in ipairs(ConnectedUsers) do if u == p then table.remove(ConnectedUsers, i); break end end  
-    if p == FollowTarget then FollowTarget = nil end  
+    if p == FollowTarget then FollowTarget = nil; stopSafeZoneLoop() end  
     if MainConnector == p then  
         MainConnector = nil; table.clear(ConnectedUsers); table.clear(Whitelist)  
         sendMessage("Main Connector has left. Connection reset.")  
@@ -447,5 +467,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v28)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v29)")  
 print("Floxy System Loaded. User Authorized.")
