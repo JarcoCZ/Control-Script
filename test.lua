@@ -1,10 +1,11 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v13)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v14)  
 
-    NEW FEATURES (v13):  
-    - `.cmds` command output now only shows command names, without descriptions.  
+    NEW FEATURES (v14):  
+    - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.) back to the `.cmds` output.  
 
     Previous Features:  
+    - `.cmds` command output now only shows command names, without descriptions.  
     - Curated `.cmds` command list.  
     - Added a full `.cmds` command list.  
     - Added `.reset`, `.shop`, `.refresh`, `.to`, `.follow` commands.  
@@ -233,13 +234,19 @@ local function serverHop()
 end  
 
 local function displayCommands()  
-    -- Modified to only show command names without descriptions  
+    -- Re-added utility commands to the list as requested  
     local commandList = [[  
 Commands:  
 .loop  
 .unloop  
 .aura  
 .aura whitelist  
+.refresh  
+.reset  
+.follow  
+.unfollow  
+.to  
+.shop  
 ]]  
     sendMessage(commandList)  
 end  
@@ -359,5 +366,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v13)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v14)")  
 print("Floxy System Loaded. User Authorized.")
