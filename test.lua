@@ -1,15 +1,12 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v42)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v43)  
 
-    UPDATES (v42):  
+    UPDATES (v43):  
+    - Reworked the `.spin` command logic. Instead of teleporting the target, it now moves the local player in a circle around the target for a more reliable and smooth visual effect.  
     - Added `.count` command to display the current player count vs the server maximum.  
-    - Added a server capacity check to the `.reset` command. It will not attempt to rejoin if the server is full.  
-    - Modified `.reset` to rejoin the current server instance, not just the place.  
-    - Added `.loop all` to target all players in the server (except whitelisted ones).  
-    - Added `.unloop all` to clear all targets.  
-    - Fixed the `.spin` command by using the correct character teleport method (`SetPrimaryPartCFrame`).  
-    - Added a safety check to the PlayerRemoving event to prevent errors if the leaving player was the spin target.  
-    - Added `.test` command to load and execute a script from a URL.  
+    - Added a server capacity check to the `.reset` command.  
+    - Modified `.reset` to rejoin the current server instance.  
+    - Added `.loop all` and `.unloop all` for mass targeting.  
 ]]  
 
 -- Services  
@@ -37,15 +34,15 @@ local safePlatform = nil
 local safeTeleportConnection = nil  
 local safeZoneConnection = nil  
 local spinConnection = nil -- Connection for the spin loop  
-local spinTarget = nil -- Player to spin  
+local spinTarget = nil -- Player to spin around  
 
 -- Configuration  
 local Dist = 0  
 local AuraEnabled = false  
 local DMG_TIMES = 2  
 local FT_TIMES = 5  
-local SPIN_RADIUS = 10  
-local SPIN_SPEED = 5  
+local SPIN_RADIUS = 7 -- Slightly reduced radius for better visual effect  
+local SPIN_SPEED = 15 -- Increased speed for a smoother spin  
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)  
 local SAFE_ZONE_OFFSET = Vector3.new(0, 20, 0)  
 
@@ -251,25 +248,29 @@ local function killOnce(playerName)
     end)  
 end  
 
+-- Reworked spin logic  
 local function spinLoop()  
     stopSpinLoop()  
     spinConnection = RunService.Heartbeat:Connect(function()  
-        if not spinTarget or not spinTarget.Parent or not spinTarget.Character or not spinTarget.Character.PrimaryPart then  
+        if not (spinTarget and spinTarget.Parent and spinTarget.Character and spinTarget.Character.PrimaryPart) then  
             stopSpinLoop()  
             return  
         end  
-        if not LP.Character or not LP.Character.PrimaryPart then  
+        if not (LP.Character and LP.Character.PrimaryPart) then  
             stopSpinLoop()  
             return  
         end  
-        local myPos = LP.Character.PrimaryPart.Position  
-        local angle = tick() * SPIN_SPEED  
-        local x = myPos.X + SPIN_RADIUS * math.cos(angle)  
-        local z = myPos.Z + SPIN_RADIUS * math.sin(angle)  
-        local targetPos = Vector3.new(x, spinTarget.Character.PrimaryPart.Position.Y, z)  
-        local newCFrame = CFrame.new(targetPos, myPos)  
         
-        spinTarget.Character:SetPrimaryPartCFrame(newCFrame)  
+        local targetPos = spinTarget.Character.PrimaryPart.Position  
+        local angle = tick() * SPIN_SPEED  
+        local x = targetPos.X + SPIN_RADIUS * math.cos(angle)  
+        local z = targetPos.Z + SPIN_RADIUS * math.sin(angle)  
+        
+        -- Use the target's Y position to avoid spinning underground or too high up  
+        local myNewPos = Vector3.new(x, targetPos.Y, z)  
+        local lookAtPos = Vector3.new(targetPos.X, myNewPos.Y, targetPos.Z) -- Look at the target on the same horizontal plane  
+        
+        teleportTo(LP.Character, CFrame.new(myNewPos, lookAtPos))  
     end)  
 end  
 
@@ -546,5 +547,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v42)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v43)")  
 print("Floxy System Loaded. User Authorized.")
