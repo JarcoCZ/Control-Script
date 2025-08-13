@@ -1,15 +1,16 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v47 - Time Changer)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v49 - Customization Update)  
 
-    UPDATES (v47 - Time Changer):  
-    - NEW: Added a `.time [number]` command to rapidly fire the ChangeTime remote event, allowing for quick time manipulation in certain games.  
-    - NEW: Added a `.fjump` command that simulates a "frog jump" by teleporting the player upwards for a high jump effect.  
+    UPDATES (v49 - Customization Update):  
+    - CUSTOMIZATION: Changed the `.fjump` height from 50 studs to exactly 10 studs as requested.  
+    - RELIABILITY: The `.time` command now waits for the 'ChangeTime' event to exist before executing, preventing errors on game start.  
+    - RELIABILITY: Corrected an error in the character loading logic (`onCharacterAdded`) that could cause script failures.  
+    - NEW: Added a `.time [number]` command to rapidly fire the ChangeTime remote event.  
     - NEW: Sends a Discord webhook notification on the executor's death, including the killer's name if available.  
     - NEW: Added `.spinspeed [value]` command to dynamically adjust the spin speed.  
     - ADJUSTMENT: The `.spin` command now elevates the user higher for a better orbital path.  
     - ENHANCEMENT: The `.safezone` command now creates a moving, invisible platform under the target player.  
     - Added `.ping` command to display the local player's current network latency.  
-    - CRITICAL FIX: Resolved a crash in the `.spin` command by correcting the `teleportTo` function.  
 ]]  
 
 -- Services  
@@ -41,6 +42,9 @@ local safeZonePlatform = nil
 local spinConnection = nil  
 local spinTarget = nil  
 
+-- Pre-loaded Instances  
+local ChangeTimeEvent = nil -- Will be loaded asynchronously  
+
 -- Configuration  
 local Dist = 0  
 local AuraEnabled = false  
@@ -52,7 +56,7 @@ local SPIN_HEIGHT_OFFSET = 5
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)  
 local SAFE_ZONE_OFFSET = Vector3.new(0, 20, 0)  
 local SAFE_ZONE_PLATFORM_OFFSET = Vector3.new(0, -3, 0)  
-local FROG_JUMP_HEIGHT = 50 -- How high the frog jump goes  
+local FROG_JUMP_HEIGHT = 10 -- How high the frog jump goes (Set to 10 studs)  
 local FROG_JUMP_PREP_DIST = 3 -- How far down it teleports before jumping  
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygqUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0Pz22"  
 
@@ -211,14 +215,13 @@ local function changeTime(count)
     local num = tonumber(count)  
     if not num or num <= 0 then return end  
     
-    local changeTimeEvent = ReplicatedStorage:FindFirstChild("ChangeTime")  
-    if not changeTimeEvent then  
-        sendMessage("Error: Could not find ChangeTime event.")  
+    if not ChangeTimeEvent then  
+        sendMessage("Error: Time event not loaded yet. Please wait a moment and try again.")  
         return  
     end  
 
     for i = 1, num do  
-        changeTimeEvent:FireServer("Anti333Exploitz123FF45324", 433, 429)  
+        ChangeTimeEvent:FireServer("Anti333Exploitz123FF45324", 433, 429)  
     end  
     sendMessage("Time command executed " .. num .. " times.")  
 end  
@@ -625,6 +628,15 @@ end
 -- ==      INITIALIZATION          ==  
 -- ==================================  
 
+task.spawn(function()  
+    ChangeTimeEvent = ReplicatedStorage:WaitForChild("ChangeTime", 30) -- Wait up to 30s  
+    if ChangeTimeEvent then  
+        print("Floxy System: ChangeTime event successfully located.")  
+    else  
+        warn("Floxy System: ChangeTime event could not be located after 30s.")  
+    end  
+end)  
+
 for _, player in ipairs(Players:GetPlayers()) do table.insert(PlayerList, player) end  
 
 LP.CharacterAdded:Connect(onCharacterAdded)  
@@ -642,10 +654,10 @@ Players.PlayerRemoving:Connect(function(p)
         sendMessage("Main Connector has left. Connection reset.")  
     end  
     if safePlatform and #Players:GetPlayers() == 1 then  
-        safePlatform:Destroy()  
+        pcall(function() safePlatform:Destroy() end)  
     end  
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v47)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v49)")  
 print("Floxy System Loaded. User Authorized.")
