@@ -1,12 +1,10 @@
 --[[  
-    Floxy Script - Admin Control by luxx (v67 - UserId Admin)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v62 - Aura Visibility)  
 
-    UPDATES (v67 - UserId Admin):  
-    - CRITICAL FIX: Changed admin identification from username to UserId for reliability and security.  
-    - The new `ADMIN_USER_ID` variable is set to 1588706905.  
-    - All connection control commands (@, .unconnect) now perform checks against the sender's UserId.  
-    - This prevents issues with display names or capitalization and ensures only the true admin has control.  
-    - The script now correctly finds and assigns the admin as MainConnector based on their UserId at runtime.  
+    UPDATES (v62 - Aura Visibility):  
+    - NEW: Added `.aura see` command to make the hitbox slightly visible (0.7 transparency).  
+    - NEW: Added `.aura unsee` command to make the hitbox completely invisible again (default).  
+    - FUNCTIONALITY: The script now remembers your visibility choice and applies it whenever you equip a new tool.  
 ]]  
 
 -- Services  
@@ -42,10 +40,9 @@ local AwaitingRejoinConfirmation = false
 local ChangeTimeEvent = nil  
 
 -- Configuration  
-local ADMIN_USER_ID = 1588706905 -- **<<< HARDCODED ADMIN USERID >>>**  
 local Dist = 0  
 local AuraEnabled = false  
-local AuraVisible = false  
+local AuraVisible = false -- NEW: State for aura visibility  
 local DMG_TIMES = 2  
 local FT_TIMES = 5  
 local SPIN_RADIUS = 7  
@@ -57,15 +54,22 @@ local FROG_JUMP_HEIGHT = 10
 local FROG_JUMP_PREP_DIST = 3  
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygqUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0Pz22"  
 
--- Authorization (The script executor is always authorized)  
-if LP.UserId ~= 1588706905 then  
-    warn("Floxy Script: This script is locked to a specific user. Halting execution.")  
-    return  
-end  
+-- Authorization  
+local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
 
 -- ==================================  
 -- ==      HELPER FUNCTIONS        ==  
 -- ==================================  
+
+local function isAuthorized(userId)  
+    for _, id in ipairs(AuthorizedUsers) do if userId == id then return true end end  
+    return false  
+end  
+
+if not isAuthorized(LP.UserId) then  
+    warn("Floxy Script: User not authorized. Halting execution.")  
+    return  
+end  
 
 local function sendWebhook(payload)  
     pcall(function()  
@@ -73,12 +77,9 @@ local function sendWebhook(payload)
     end)  
 end  
 
-local function sendMessage(message, channel)  
+local function sendMessage(message)  
     pcall(function()  
-        local targetChannel = channel or TextChatService.ChatInputBarConfiguration.TargetTextChannel  
-        if targetChannel then  
-            targetChannel:SendAsync(message)  
-        end  
+        TextChatService.ChatInputBarConfiguration.TargetTextChannel:SendAsync(message)  
     end)  
 end  
 
@@ -113,6 +114,7 @@ local function createReachPart(tool)
         if not handle:FindFirstChild("BoxReachPart") then  
             local p = Instance.new("Part", handle)  
             p.Name = "BoxReachPart"; p.Size = Vector3.new(Dist, Dist, Dist)  
+            -- CORRECTED: Set transparency based on the AuraVisible state  
             p.Transparency = AuraVisible and 0.7 or 1  
             p.CanCollide = false; p.Massless = true  
             local w = Instance.new("WeldConstraint", p)  
@@ -204,11 +206,12 @@ local function setAuraVisibility(visible)
     AuraVisible = visible  
     local transparency = visible and 0.7 or 1  
     if LP.Character then  
-        local tool = LP.Character:FindFirstChildOfClass("Tool")  
-        if tool then  
-            local hitbox = tool:FindFirstChild("BoxReachPart")  
-            if hitbox then  
-                hitbox.Transparency = transparency  
+        for _, tool in ipairs(LP.Character:GetDescendants()) do  
+            if tool:IsA("Tool") then  
+                local hitbox = tool:FindFirstChild("BoxReachPart")  
+                if hitbox then  
+                    hitbox.Transparency = transparency  
+                end  
             end  
         end  
     end  
@@ -346,13 +349,9 @@ local function setAura(range)
         forceEquip(AuraEnabled or #Targets > 0)  
         
         if LP.Character then  
-            local tool = LP.Character:FindFirstWhichIsA("Tool")  
-            if tool then  
-                local reachPart = tool:FindFirstChild("BoxReachPart")  
-                if reachPart then  
-                    reachPart.Size = Vector3.new(Dist, Dist, Dist)  
-                else  
-                    createReachPart(tool)  
+            for _, tool in ipairs(LP.Character:GetDescendants()) do  
+                if tool:IsA("Tool") and tool:FindFirstChild("BoxReachPart") then  
+                    tool.BoxReachPart.Size = Vector3.new(Dist, Dist, Dist)  
                 end  
             end  
         end  
@@ -376,7 +375,6 @@ end
 
 local function displayCommands()  
     local commandList_1 = [[  
-@ [user], .unconnect [user]  
 .kill [user], .loop [user|all], .unloop [user|all]  
 .aura [range|off], .aura [see|unsee], .aura whitelist [user], .aura unwhitelist [user]  
 .to [user], .follow [user], .unfollow, .spin [user], .unspin, .spinspeed [val]  
@@ -433,40 +431,32 @@ local function onMessageReceived(messageData)
         end  
     end  
 
-    -- Connection Commands (ADMIN ONLY)  
-    if command:sub(1,1) == "@" then  
-        if authorPlayer.UserId ~= ADMIN_USER_ID then return end -- Check if author is ADMIN  
-        if not MainConnector then MainConnector = authorPlayer end  
-
-        local username = command:sub(2)  
-        if arg2 then username = arg2 end  
-        
-        local targetPlayer = findPlayer(username)  
-        if targetPlayer and not table.find(ConnectedUsers, targetPlayer) then  
-            table.insert(ConnectedUsers, targetPlayer)  
-            table.insert(Whitelist, targetPlayer.Name)  
-            sendMessage(authorPlayer.Name .. " has connected you.", messageData.Channel)  
+    if command == "connect" then  
+        if not MainConnector then  
+            MainConnector = authorPlayer  
+            table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
+            sendMessage("Connected With " .. authorPlayer.Name)  
+        elseif authorPlayer == MainConnector and arg2 then  
+            local targetPlayer = findPlayer(arg2)  
+            if targetPlayer and not table.find(ConnectedUsers, targetPlayer) then  
+                table.insert(ConnectedUsers, targetPlayer)  
+                sendMessage("Connected With " .. targetPlayer.Name)  
+            end  
         end  
         return  
     end  
 
-    if command == ".unconnect" and arg2 then  
-        if authorPlayer.UserId ~= ADMIN_USER_ID then return end -- Check if author is ADMIN  
-        
+    if authorPlayer ~= LP and not table.find(ConnectedUsers, authorPlayer) then return end  
+
+    if command == ".unconnect" and authorPlayer == MainConnector and arg2 then  
         local targetPlayer = findPlayer(arg2)  
-        if targetPlayer and targetPlayer.UserId ~= ADMIN_USER_ID then  
-            for i, user in ipairs(ConnectedUsers) do if user == targetPlayer then table.remove(ConnectedUsers, i); break end end  
-            for i, name in ipairs(Whitelist) do if name == targetPlayer.Name then table.remove(Whitelist, i); break end end  
-            sendMessage(authorPlayer.Name .. " has unconnected " .. targetPlayer.Name, messageData.Channel)  
+        if targetPlayer and targetPlayer ~= MainConnector then  
+            for i, user in ipairs(ConnectedUsers) do  
+                if user == targetPlayer then table.remove(ConnectedUsers, i); break end  
+            end  
+            sendMessage("Unconnected: " .. targetPlayer.Name)  
         end  
-        return  
-    end  
-
-    -- Check if user is authorized to use other commands  
-    if not table.find(ConnectedUsers, authorPlayer) then return end  
-
-    -- Other Commands  
-    if command == ".kill" and arg2 then killOnce(arg2)  
+    elseif command == ".kill" and arg2 then killOnce(arg2)  
     elseif command == ".loop" and arg2 then  
         if arg2:lower() == "all" then  
             for _, player in ipairs(PlayerList) do  
@@ -484,6 +474,7 @@ local function onMessageReceived(messageData)
         else  
             removeTarget(arg2)  
         end  
+    -- CORRECTED: Added logic for visibility commands  
     elseif command == ".aura" and arg2 then  
         if arg2:lower() == "off" then  
             setAura(0)  
@@ -666,66 +657,27 @@ task.spawn(function()
     end  
 end)  
 
-for _, player in ipairs(Players:GetPlayers()) do  
-    table.insert(PlayerList, player)  
-    if player.UserId == ADMIN_USER_ID then  
-        MainConnector = player  
-        print("Floxy System: Admin '" .. player.Name .. "' found and set as Main Connector.")  
-    end  
-end  
-table.insert(ConnectedUsers, LP)  
-table.insert(Whitelist, LP.Name)  
+for _, player in ipairs(Players:GetPlayers()) do table.insert(PlayerList, player) end  
 
 LP.CharacterAdded:Connect(onCharacterAdded)  
-if LP.Character then onCharacterAdded(LP.Character) end
-Players.PlayerAdded:Connect(function(p)  
-    table.insert(PlayerList, p)  
-    if p.UserId == ADMIN_USER_ID then  
-        MainConnector = p  
-        sendMessage("Admin '"..p.Name.."' has joined.")  
-        print("Floxy System: Admin '" .. p.Name .. "' joined and set as Main Connector.")  
-    end  
-end)  
+if LP.Character then onCharacterAdded(LP.Character) end  
 
+Players.PlayerAdded:Connect(function(p) table.insert(PlayerList, p) end)  
 Players.PlayerRemoving:Connect(function(p)  
     if spinTarget and spinTarget == p then stopSpinLoop() end  
     removeTarget(p.Name)  
     for i, pl in ipairs(PlayerList) do if pl == p then table.remove(PlayerList, i); break end end  
     for i, u in ipairs(ConnectedUsers) do if u == p then table.remove(ConnectedUsers, i); break end end  
-    for i, n in ipairs(Whitelist) do if n == p.Name then table.remove(Whitelist, i); break end end  
     if FollowTarget and p == FollowTarget then stopSafeZoneLoop() end  
-
     if MainConnector == p then  
-        MainConnector = nil  
-        -- Find a new MainConnector if possible, otherwise reset.  
-        local newAdminFound = false  
-        for _, player in ipairs(Players:GetPlayers()) do  
-            if player.UserId == ADMIN_USER_ID then  
-                MainConnector = player  
-                newAdminFound = true  
-                sendMessage("Main Connector left, but new admin '"..player.Name.."' found.")  
-                print("Floxy System: Main Connector left, new admin '"..player.Name.."' assigned.")  
-                break  
-            end  
-        end  
-        if not newAdminFound then  
-             -- If the admin was the last one, reset connections to only the local player (executor)  
-            table.clear(ConnectedUsers)  
-            table.clear(Whitelist)  
-            table.insert(ConnectedUsers, LP)  
-            table.insert(Whitelist, LP.Name)  
-            sendMessage("Main Connector has left. Connection reset to self.")  
-        end  
+        MainConnector = nil; table.clear(ConnectedUsers); table.clear(Whitelist)  
+        sendMessage("Main Connector has left. Connection reset.")  
     end  
-    
-    if safePlatform and #Players:GetPlayers() <= 1 then  
+    if safePlatform and #Players:GetPlayers() == 1 then  
         pcall(function() safePlatform:Destroy() end)  
     end  
 end)  
-
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
--- Final setup message  
-local adminName = MainConnector and MainConnector.Name or "Not in server"  
-sendMessage("Script Executed - Floxy (Fixed by luxx v67 - UserId Admin)")  
-print("Floxy System Loaded. User Authorized. Admin UserId is "..ADMIN_USER_ID.." ("..adminName..")")
+sendMessage("Script Executed - Floxy (Fixed by luxx v62)")  
+print("Floxy System Loaded. User Authorized.")
