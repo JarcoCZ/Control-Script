@@ -1,12 +1,10 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v43)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v43 - Spin Fix)  
 
-    UPDATES (v43):  
-    - Reworked the `.spin` command logic. Instead of teleporting the target, it now moves the local player in a circle around the target for a more reliable and smooth visual effect.  
-    - Added `.count` command to display the current player count vs the server maximum.  
-    - Added a server capacity check to the `.reset` command.  
-    - Modified `.reset` to rejoin the current server instance.  
-    - Added `.loop all` and `.unloop all` for mass targeting.  
+    UPDATES (v43 - Spin Fix):  
+    - CRITICAL FIX: The `.spin` command was failing because the `teleportTo` function did not correctly handle CFrame values.  
+    - The `teleportTo` function has been updated to accept both Vector3 and CFrame arguments, resolving the spin issue.  
+    - All other commands and logic from v43 remain unchanged.  
 ]]  
 
 -- Services  
@@ -33,16 +31,16 @@ local SpammingEnabled = false
 local safePlatform = nil  
 local safeTeleportConnection = nil  
 local safeZoneConnection = nil  
-local spinConnection = nil -- Connection for the spin loop  
-local spinTarget = nil -- Player to spin around  
+local spinConnection = nil  
+local spinTarget = nil  
 
 -- Configuration  
 local Dist = 0  
 local AuraEnabled = false  
 local DMG_TIMES = 2  
 local FT_TIMES = 5  
-local SPIN_RADIUS = 7 -- Slightly reduced radius for better visual effect  
-local SPIN_SPEED = 15 -- Increased speed for a smoother spin  
+local SPIN_RADIUS = 7  
+local SPIN_SPEED = 15  
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)  
 local SAFE_ZONE_OFFSET = Vector3.new(0, 20, 0)  
 
@@ -80,9 +78,14 @@ local function findPlayer(partialName)
     return nil  
 end  
 
-local function teleportTo(character, position)  
+-- FIXED TELEPORT FUNCTION  
+local function teleportTo(character, destination)  
     if character and character.PrimaryPart then  
-        character:SetPrimaryPartCFrame(CFrame.new(position))  
+        if typeof(destination) == "CFrame" then  
+            character:SetPrimaryPartCFrame(destination)  
+        elseif typeof(destination) == "Vector3" then  
+            character:SetPrimaryPartCFrame(CFrame.new(destination))  
+        end  
     end  
 end  
 
@@ -266,9 +269,8 @@ local function spinLoop()
         local x = targetPos.X + SPIN_RADIUS * math.cos(angle)  
         local z = targetPos.Z + SPIN_RADIUS * math.sin(angle)  
         
-        -- Use the target's Y position to avoid spinning underground or too high up  
         local myNewPos = Vector3.new(x, targetPos.Y, z)  
-        local lookAtPos = Vector3.new(targetPos.X, myNewPos.Y, targetPos.Z) -- Look at the target on the same horizontal plane  
+        local lookAtPos = Vector3.new(targetPos.X, myNewPos.Y, targetPos.Z)  
         
         teleportTo(LP.Character, CFrame.new(myNewPos, lookAtPos))  
     end)  
