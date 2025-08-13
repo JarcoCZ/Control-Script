@@ -1,11 +1,12 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v26)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v28)  
 
-    UPDATES (v26):  
-    - Added `.safezone [username]` command: Teleports you 20 studs directly above the specified player.  
-    - Updated command list with the new command.  
+    UPDATES (v28):  
+    - Modified `.safe` command to continuously teleport the player upwards. The `.unsafe` command stops this and returns the player to a spawn point.  
+    - Split the `.cmds` command output into two messages for better readability.  
 
     Previous Features:  
+    - Added `.safezone [username]` command.  
     - Added `.safe` and `.unsafe` commands for a remote platform.  
     - Fixed a critical typo in the `.refresh` command.  
     - Modified `.refresh` and `.reset` to be executable by any connected user.  
@@ -34,6 +35,7 @@ local ForceEquipConnection = nil
 local HeartbeatConnection = nil  
 local SpammingEnabled = false  
 local safePlatform = nil -- Variable to hold our safe platform  
+local safeTeleportConnection = nil -- Connection for the safe teleport loop  
 
 -- Configuration  
 local Dist = 0  
@@ -251,18 +253,23 @@ local function serverHop()
 end  
 
 local function displayCommands()  
-    local commandList = [[  
--- COMMANDS --  
+    local commandList_1 = [[  
+-- COMMANDS (1/2) --  
 Loop Attack: .loop [user], .unloop [user]  
 Aura Attack: .aura [range], .unloop [user]  
 Whitelist: .aura whitelist [user], .aura unwhitelist [user]  
 Movement: .to [user], .follow [user], .unfollow  
+]]  
+    local commandList_2 = [[  
+-- COMMANDS (2/2) --  
 Safe Zone: .safe, .unsafe, .safezone [user]  
 Character: .refresh, .reset, .equip, .unequip  
 Server: .shop (hops server)  
 Misc: .spam, .unspam, .say [msg]  
 ]]  
-    sendMessage(commandList)  
+    sendMessage(commandList_1)  
+    task.wait(0.1) -- Small delay to ensure messages send in order  
+    sendMessage(commandList_2)  
 end  
 
 -- ==================================  
@@ -363,7 +370,18 @@ local function onMessageReceived(messageData)
             safePlatform.CanCollide = true  
         end  
         teleportTo(LP.Character, SAFE_PLATFORM_POS + Vector3.new(0, 5, 0))  
+        if not safeTeleportConnection or not safeTeleportConnection.Connected then  
+            safeTeleportConnection = RunService.Heartbeat:Connect(function()  
+                if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") and safePlatform and safePlatform.Parent then  
+                    teleportTo(LP.Character, LP.Character.HumanoidRootPart.Position + Vector3.new(0, 1, 0))  
+                end  
+            end)  
+        end  
     elseif command == ".unsafe" then  
+        if safeTeleportConnection and safeTeleportConnection.Connected then  
+            safeTeleportConnection:Disconnect()  
+            safeTeleportConnection = nil  
+        end  
         if safePlatform and safePlatform.Parent then  
             safePlatform:Destroy()  
             safePlatform = nil  
@@ -373,11 +391,11 @@ local function onMessageReceived(messageData)
             local spawnPoint = spawns:IsA("SpawnLocation") and spawns or spawns:GetChildren()[1]  
             if spawnPoint then  
                 teleportTo(LP.Character, spawnPoint.Position + Vector3.new(0, 5, 0))  
-            else -- Failsafe: just respawn the character  
+            else   
                  LP.Character.Humanoid.Health = 0  
             end  
         else  
-            LP.Character.Humanoid.Health = 0 -- Failsafe if no spawns found  
+            LP.Character.Humanoid.Health = 0  
         end  
     elseif command == ".safezone" and arg2 then  
         local targetPlayer = findPlayer(arg2)  
@@ -429,5 +447,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v26)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v28)")  
 print("Floxy System Loaded. User Authorized.")
