@@ -1,10 +1,10 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v43 - Ping & Spin Fix)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v43 - SafeZone Platform, Ping & Spin Fix)  
 
-    UPDATES (v43 - Ping & Spin Fix):  
-    - Added `.ping` command to display the local player's current network latency in milliseconds.  
+    UPDATES (v43 - SafeZone Platform, Ping & Spin Fix):  
+    - ENHANCEMENT: The `.safezone` command now creates a moving, invisible platform under the target player for better elevation and stability.  
+    - Added `.ping` command to display the local player's current network latency.  
     - CRITICAL FIX: The `.spin` command was failing because the `teleportTo` function did not correctly handle CFrame values.  
-    - The `teleportTo` function has been updated to accept both Vector3 and CFrame arguments, resolving the spin issue.  
 ]]  
 
 -- Services  
@@ -31,6 +31,7 @@ local SpammingEnabled = false
 local safePlatform = nil  
 local safeTeleportConnection = nil  
 local safeZoneConnection = nil  
+local safeZonePlatform = nil -- New variable for the safezone platform  
 local spinConnection = nil  
 local spinTarget = nil  
 
@@ -43,6 +44,7 @@ local SPIN_RADIUS = 7
 local SPIN_SPEED = 15  
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)  
 local SAFE_ZONE_OFFSET = Vector3.new(0, 20, 0)  
+local SAFE_ZONE_PLATFORM_OFFSET = Vector3.new(0, -3, 0) -- Offset for platform below player  
 
 -- Authorization  
 local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
@@ -78,7 +80,6 @@ local function findPlayer(partialName)
     return nil  
 end  
 
--- FIXED TELEPORT FUNCTION  
 local function teleportTo(character, destination)  
     if character and character.PrimaryPart then  
         if typeof(destination) == "CFrame" then  
@@ -198,6 +199,10 @@ local function stopSafeZoneLoop()
         safeZoneConnection:Disconnect()  
         safeZoneConnection = nil  
     end  
+    if safeZonePlatform and safeZonePlatform.Parent then  
+        safeZonePlatform:Destroy()  
+        safeZonePlatform = nil  
+    end  
 end  
 
 local function forceEquip(shouldEquip)  
@@ -251,7 +256,6 @@ local function killOnce(playerName)
     end)  
 end  
 
--- Reworked spin logic  
 local function spinLoop()  
     stopSpinLoop()  
     spinConnection = RunService.Heartbeat:Connect(function()  
@@ -379,7 +383,7 @@ local function onMessageReceived(messageData)
     elseif command == ".unloop" and arg2 then  
         if arg2:lower() == "all" then  
             table.clear(Targets)  
-            forceEquip(AuraEnabled) -- only keep equipping if aura is on  
+            forceEquip(AuraEnabled)  
         else  
             removeTarget(arg2)  
         end  
@@ -490,6 +494,16 @@ local function onMessageReceived(messageData)
         local targetPlayer = findPlayer(arg2)  
         if not targetPlayer then return end  
         stopSafeZoneLoop()  
+        
+        if not safeZonePlatform or not safeZonePlatform.Parent then  
+            safeZonePlatform = Instance.new("Part", Workspace)  
+            safeZonePlatform.Name = "SafeZonePlatform"  
+            safeZonePlatform.Size = Vector3.new(10, 1, 10)  
+            safeZonePlatform.Transparency = 1  
+            safeZonePlatform.Anchored = true  
+            safeZonePlatform.CanCollide = false  
+        end  
+        
         safeZoneConnection = RunService.Heartbeat:Connect(function()  
             if not LP.Character or not LP.Character.PrimaryPart then stopSafeZoneLoop(); return end  
             if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character or not targetPlayer.Character.PrimaryPart then  
@@ -499,6 +513,9 @@ local function onMessageReceived(messageData)
             end  
             local targetPos = targetPlayer.Character.PrimaryPart.Position  
             teleportTo(LP.Character, targetPos + SAFE_ZONE_OFFSET)  
+            if safeZonePlatform then  
+                safeZonePlatform.Position = targetPos + SAFE_ZONE_PLATFORM_OFFSET  
+            end  
         end)  
     elseif command == ".unsafezone" then  
         stopSafeZoneLoop()  
@@ -552,5 +569,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v43)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v43 Spin)")  
 print("Floxy System Loaded. User Authorized.")
