@@ -1,7 +1,9 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v49 - Customization Update)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v51 - Customization Update)  
 
-    UPDATES (v49 - Customization Update):  
+    UPDATES (v51 - Customization Update):  
+    - CUSTOMIZATION: The `.time` command's loop now starts from 100 (`for i = 100, num do`).  
+    - CUSTOMIZATION: The `.safe` command no longer makes the player bounce up and down. It is now a single teleport to the safe platform.  
     - CUSTOMIZATION: Changed the `.fjump` height from 50 studs to exactly 10 studs as requested.  
     - RELIABILITY: The `.time` command now waits for the 'ChangeTime' event to exist before executing, preventing errors on game start.  
     - RELIABILITY: Corrected an error in the character loading logic (`onCharacterAdded`) that could cause script failures.  
@@ -36,7 +38,6 @@ local ForceEquipConnection = nil
 local HeartbeatConnection = nil  
 local SpammingEnabled = false  
 local safePlatform = nil  
-local safeTeleportConnection = nil  
 local safeZoneConnection = nil  
 local safeZonePlatform = nil  
 local spinConnection = nil  
@@ -220,10 +221,17 @@ local function changeTime(count)
         return  
     end  
 
-    for i = 1, num do  
+    local executionCount = 0  
+    for i = 100, num do  
         ChangeTimeEvent:FireServer("Anti333Exploitz123FF45324", 433, 429)  
+        executionCount = executionCount + 1  
     end  
-    sendMessage("Time command executed " .. num .. " times.")  
+    
+    if executionCount > 0 then  
+        sendMessage("Time command executed " .. executionCount .. " times.")  
+    else  
+        sendMessage("Time command did not run (target number must be 100 or higher).")  
+    end  
 end  
 
 local function frogJump()  
@@ -536,18 +544,7 @@ local function onMessageReceived(messageData)
             safePlatform.CanCollide = true  
         end  
         teleportTo(LP.Character, SAFE_PLATFORM_POS + Vector3.new(0, 5, 0))  
-        if not safeTeleportConnection or not safeTeleportConnection.Connected then  
-            safeTeleportConnection = RunService.Heartbeat:Connect(function()  
-                if LP.Character and LP.Character.PrimaryPart and safePlatform and safePlatform.Parent then  
-                    teleportTo(LP.Character, LP.Character.PrimaryPart.Position + Vector3.new(0, 1, 0))  
-                end  
-            end)  
-        end  
     elseif command == ".unsafe" then  
-        if safeTeleportConnection and safeTeleportConnection.Connected then  
-            safeTeleportConnection:Disconnect()  
-            safeTeleportConnection = nil  
-        end  
         if safePlatform and safePlatform.Parent then  
             safePlatform:Destroy()  
             safePlatform = nil  
@@ -659,5 +656,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v49)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v51)")  
 print("Floxy System Loaded. User Authorized.")
