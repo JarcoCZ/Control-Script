@@ -1,10 +1,11 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v15)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v16)  
 
-    BUG FIXES (v15):  
-    - Corrected the `.cmds` output to display the proper list of commands without incorrect descriptions.  
+    BUG FIXES (v16):  
+    - Added .equip and .unequip commands.  
 
     Previous Features:  
+    - Corrected the `.cmds` output to display the proper list of commands without incorrect descriptions.  
     - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.) back to the `.cmds` output.  
     - `.cmds` command output now only shows command names, without descriptions.  
     - Curated `.cmds` command list.  
@@ -19,12 +20,6 @@ local RunService = game:GetService("RunService")
 local TextChatService = game:GetService("TextChatService")  
 local TeleportService = game:GetService("TeleportService")  
 local HttpService = game:GetService("HttpService") -- For server hopping  
-local VirtualInputManager = game:GetService("VirtualInputManager") -- For .bot command  
-
--- Load External Bot Script  
-pcall(function()  
-    loadstring(game:HttpGet('https://raw.githubusercontent.com/yeerma/1/main/bot'))()  
-end)  
 
 -- Local Player & Script-Wide Variables  
 local LP = Players.LocalPlayer  
@@ -174,12 +169,6 @@ end
 -- ==      COMMANDS & CONTROLS     ==  
 -- ==================================  
 
-local function toggleBot()  
-    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.X, false, game)  
-    task.wait(0.1)  
-    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.X, false, game)  
-end  
-
 local function forceEquip(shouldEquip)  
     if shouldEquip then  
         if not ForceEquipConnection then  
@@ -250,7 +239,6 @@ local function displayCommands()
     -- Corrected command list as per user feedback  
     local commandList = [[  
 Commands:  
-.bot  
 .loop  
 .unloop  
 .aura  
@@ -261,6 +249,8 @@ Commands:
 .unfollow  
 .to  
 .shop  
+.equip  
+.unequip  
 ]]  
     sendMessage(commandList)  
 end  
@@ -281,7 +271,7 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    if command == "bananek123" then  
+    if command == "test" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
@@ -339,8 +329,20 @@ local function onMessageReceived(messageData)
         FollowTarget = nil  
     elseif command == ".cmds" then  
         displayCommands()  
-    elseif command == ".bot" or command == ".unbot" then  
-        toggleBot()  
+    elseif command == ".equip" then  
+        if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
+            local tool = LP.Backpack:FindFirstChildWhichIsA("Tool")  
+            if tool then  
+                LP.Character.Humanoid:EquipTool(tool)  
+            end  
+        end  
+    elseif command == ".unequip" then  
+        if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
+            local tool = LP.Character:FindFirstChildWhichIsA("Tool")  
+            if tool then  
+                tool.Parent = LP.Backpack  
+            end  
+        end  
     end  
 end  
 
@@ -382,5 +384,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v15)")  
+sendMessage("Script Executed Test - Floxy (Fixed by luxx v16)")  
 print("Floxy System Loaded. User Authorized.")
