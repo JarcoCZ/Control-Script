@@ -1,8 +1,8 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v51 - Customization Update)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v52 - Reversion Update)  
 
-    UPDATES (v51 - Customization Update):  
-    - CUSTOMIZATION: The `.time` command's loop now starts from 100 (`for i = 100, num do`).  
+    UPDATES (v52 - Reversion Update):  
+    - REVERSION: The `.time` command's loop now runs from 1 to the specified number, removing the previous "greater than 100" condition.  
     - CUSTOMIZATION: The `.safe` command no longer makes the player bounce up and down. It is now a single teleport to the safe platform.  
     - CUSTOMIZATION: Changed the `.fjump` height from 50 studs to exactly 10 studs as requested.  
     - RELIABILITY: The `.time` command now waits for the 'ChangeTime' event to exist before executing, preventing errors on game start.  
@@ -221,17 +221,10 @@ local function changeTime(count)
         return  
     end  
 
-    local executionCount = 0  
-    for i = 100, num do  
+    for i = 1, num do  
         ChangeTimeEvent:FireServer("Anti333Exploitz123FF45324", 433, 429)  
-        executionCount = executionCount + 1  
     end  
-    
-    if executionCount > 0 then  
-        sendMessage("Time command executed " .. executionCount .. " times.")  
-    else  
-        sendMessage("Time command did not run (target number must be 100 or higher).")  
-    end  
+    sendMessage("Time command executed " .. num .. " times.")  
 end  
 
 local function frogJump()  
@@ -656,5 +649,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v51)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v52)")  
 print("Floxy System Loaded. User Authorized.")
