@@ -1,10 +1,11 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v16)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v17)  
 
-    BUG FIXES (v16):  
-    - Added .equip and .unequip commands.  
+    UPDATES (v17):  
+    - Changed .reset to make the player rejoin the current server.  
 
     Previous Features:  
+    - Added .equip and .unequip commands.  
     - Corrected the `.cmds` output to display the proper list of commands without incorrect descriptions.  
     - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.) back to the `.cmds` output.  
     - `.cmds` command output now only shows command names, without descriptions.  
@@ -271,7 +272,7 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    if command == "test" then  
+    if command == "bananek123" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
@@ -305,7 +306,7 @@ local function onMessageReceived(messageData)
             local p = findPlayer(arg3); if p then for i, n in ipairs(Whitelist) do if n == p.Name then table.remove(Whitelist, i); break end end end  
         else setAura(arg2) end  
     elseif command == ".reset" and authorPlayer == LP then  
-        TeleportService:Teleport(game.PlaceId, LP)  
+        pcall(TeleportService.TeleportToPlaceInstance, TeleportService, game.PlaceId, game.JobId, LP)  
     elseif command == ".shop" and authorPlayer == LP then  
         serverHop()  
     elseif command == ".refresh" and authorPlayer == LP then  
@@ -384,5 +385,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed Test - Floxy (Fixed by luxx v16)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v17)")  
 print("Floxy System Loaded. User Authorized.")
