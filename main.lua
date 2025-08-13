@@ -388,6 +388,6 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v22 on 13.08.2025)")
+sendMessage("Script Executed - Floxy (Fixed by luxx v22)")
 sendMessage("If you find anyone using this script other than jckcjh7, FlexFightTerminator and defnotluxs. Please report it to luxx!")  
 print("Floxy System Loaded. User Authorized.")
