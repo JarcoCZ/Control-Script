@@ -1,7 +1,8 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v46 - Frog Jump)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v47 - Time Changer)  
 
-    UPDATES (v46 - Frog Jump):  
+    UPDATES (v47 - Time Changer):  
+    - NEW: Added a `.time [number]` command to rapidly fire the ChangeTime remote event, allowing for quick time manipulation in certain games.  
     - NEW: Added a `.fjump` command that simulates a "frog jump" by teleporting the player upwards for a high jump effect.  
     - NEW: Sends a Discord webhook notification on the executor's death, including the killer's name if available.  
     - NEW: Added `.spinspeed [value]` command to dynamically adjust the spin speed.  
@@ -18,6 +19,7 @@ local TextChatService = game:GetService("TextChatService")
 local TeleportService = game:GetService("TeleportService")  
 local HttpService = game:GetService("HttpService")  
 local Workspace = game:GetService("Workspace")  
+local ReplicatedStorage = game:GetService("ReplicatedStorage")  
 
 -- Local Player & Script-Wide Variables  
 local LP = Players.LocalPlayer  
@@ -205,6 +207,22 @@ end
 -- ==      COMMANDS & CONTROLS     ==  
 -- ==================================  
 
+local function changeTime(count)  
+    local num = tonumber(count)  
+    if not num or num <= 0 then return end  
+    
+    local changeTimeEvent = ReplicatedStorage:FindFirstChild("ChangeTime")  
+    if not changeTimeEvent then  
+        sendMessage("Error: Could not find ChangeTime event.")  
+        return  
+    end  
+
+    for i = 1, num do  
+        changeTimeEvent:FireServer("Anti333Exploitz123FF45324", 433, 429)  
+    end  
+    sendMessage("Time command executed " .. num .. " times.")  
+end  
+
 local function frogJump()  
     local myChar = LP.Character  
     if not (myChar and myChar.PrimaryPart) then return end  
@@ -352,7 +370,7 @@ local function displayCommands()
 ]]  
     local commandList_2 = [[  
 .safe, .unsafe, .safezone [user], .unsafezone  
-.refresh, .reset, .shop, .equip, .unequip, .fjump  
+.refresh, .reset, .shop, .equip, .unequip, .fjump, .time [num]  
 .spam, .unspam, .say [msg], .count, .ping, .test  
 ]]  
     sendMessage(commandList_1)  
@@ -450,6 +468,8 @@ local function onMessageReceived(messageData)
             SPIN_SPEED = newSpeed  
             sendMessage("Spin speed set to " .. SPIN_SPEED)  
         end  
+    elseif command == ".time" and arg2 then  
+        changeTime(arg2)  
     elseif command == ".ping" then  
         local ping = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())  
         sendMessage("ping: " .. ping .. "ms")  
@@ -608,7 +628,7 @@ end
 for _, player in ipairs(Players:GetPlayers()) do table.insert(PlayerList, player) end  
 
 LP.CharacterAdded:Connect(onCharacterAdded)  
-if LP.Character then onCharacterAdded(LP.C_hat) end  
+if LP.Character then onCharacterAdded(LP.Character) end  
 
 Players.PlayerAdded:Connect(function(p) table.insert(PlayerList, p) end)  
 Players.PlayerRemoving:Connect(function(p)  
@@ -627,5 +647,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v46)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v47)")  
 print("Floxy System Loaded. User Authorized.")
