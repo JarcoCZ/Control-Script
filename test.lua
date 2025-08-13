@@ -1,7 +1,8 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v30)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v31)  
 
-    UPDATES (v30):  
+    UPDATES (v31):  
+    - Removed descriptive text from the `.cmds` output for a cleaner look.  
     - Adjusted the delay in the `.cmds` function to 0.5 seconds between messages for improved reliability.  
     - Modified `.safezone` to be a loop, continuously teleporting the player above the target. Use `.unfollow` to cancel.  
     - Modified `.safe` command to continuously teleport the player upwards.  
@@ -262,18 +263,16 @@ end
 
 local function displayCommands()  
     local commandList_1 = [[  
--- COMMANDS (1/2) --  
-Loop Attack: .loop [user], .unloop [user]  
-Aura Attack: .aura [range], .unloop [user]  
-Whitelist: .aura whitelist [user], .aura unwhitelist [user]  
-Movement: .to [user], .follow [user], .unfollow  
+.loop [user], .unloop [user]  
+.aura [range], .unloop [user]  
+.aura whitelist [user], .aura unwhitelist [user]  
+.to [user], .follow [user], .unfollow  
 ]]  
     local commandList_2 = [[  
--- COMMANDS (2/2) --  
-Safe Zone: .safe, .unsafe, .safezone [user]  
-Character: .refresh, .reset, .equip, .unequip  
-Server: .shop (hops server)  
-Misc: .spam, .unspam, .say [msg]  
+.safe, .unsafe, .safezone [user]  
+.refresh, .reset, .equip, .unequip  
+.shop (hops server)  
+.spam, .unspam, .say [msg]  
 ]]  
     sendMessage(commandList_1)  
     task.wait(0.5) -- Adjusted delay  
@@ -466,5 +465,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v30)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v31)")  
 print("Floxy System Loaded. User Authorized.")
