@@ -1,17 +1,16 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v24)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v25)  
 
-    UPDATES (v24):  
-    - Fixed a critical typo in the `.refresh` command ("HumanoidRootPpart" to "HumanoidRootPart") that prevented it from working.  
-    - Modified `.refresh` to be executable by any connected user.  
+    UPDATES (v25):  
+    - Added `.safe` command: Creates a platform high in the sky and teleports the user to it. Can be triggered by connected users.  
+    - Added `.unsafe` command: Teleports the user back to a spawn point. Can be triggered by connected users.  
+    - Cleaned up the `.cmds` command list for better readability.  
 
     Previous Features:  
-    - Modified the `.reset` command to be executable by any connected user.  
-    - Added `.spam` and `.unspam` commands.  
-    - Added a `.say` command.  
-    - Fixed the .reset command to reliably rejoin the current server using game.PlaceId.  
+    - Fixed a critical typo in the `.refresh` command.  
+    - Modified `.refresh` and `.reset` to be executable by any connected user.  
+    - Added `.spam`, `.unspam`, and `.say` commands.  
     - Changed the connection keyword to "test".  
-    - Added .equip and .unequip commands.  
 ]]  
 
 -- Services  
@@ -19,7 +18,8 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")  
 local TextChatService = game:GetService("TextChatService")  
 local TeleportService = game:GetService("TeleportService")  
-local HttpService = game:GetService("HttpService") -- For server hopping  
+local HttpService = game:GetService("HttpService")  
+local Workspace = game:GetService("Workspace")  
 
 -- Local Player & Script-Wide Variables  
 local LP = Players.LocalPlayer  
@@ -34,12 +34,14 @@ local MainConnector = nil
 local ForceEquipConnection = nil  
 local HeartbeatConnection = nil  
 local SpammingEnabled = false  
+local safePlatform = nil -- Variable to hold our safe platform  
 
 -- Configuration  
 local Dist = 0  
 local AuraEnabled = false  
 local DMG_TIMES = 2  
 local FT_TIMES = 5  
+local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0) -- High up in the sky  
 
 -- Authorization  
 local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
@@ -77,6 +79,12 @@ local function findPlayer(partialName)
         end  
     end  
     return nil  
+end  
+
+local function teleportTo(character, position)  
+    if character and character:FindFirstChild("HumanoidRootPart") then  
+        character.HumanoidRootPart.CFrame = CFrame.new(position)  
+    end  
 end  
 
 -- ==================================  
@@ -245,15 +253,15 @@ end
 
 local function displayCommands()  
     local commandList = [[  
-Commands:  
-.loop, .unloop  
-.aura, .aura whitelist  
-.refresh, .reset  
-.follow, .unfollow  
-.to, .shop  
-.equip, .unequip  
-.spam, .unspam  
-.say  
+-- COMMANDS --  
+Loop Attack: .loop [user], .unloop [user]  
+Aura Attack: .aura [range], .unloop [user]  
+Whitelist: .aura whitelist [user], .aura unwhitelist [user]  
+Movement: .to [user], .follow [user], .unfollow  
+Safe Zone: .safe, .unsafe  
+Character: .refresh, .reset, .equip, .unequip  
+Server: .shop (hops server)  
+Misc: .spam, .unspam, .say [msg]  
 ]]  
     sendMessage(commandList)  
 end  
@@ -319,7 +327,7 @@ local function onMessageReceived(messageData)
     elseif command == ".to" and arg2 then  
         local targetPlayer = findPlayer(arg2)  
         if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") and LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then  
-            LP.Character.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame  
+            teleportTo(LP.Character, targetPlayer.Character.HumanoidRootPart.Position)  
         end  
     elseif command == ".follow" and arg2 then  
         local targetPlayer = findPlayer(arg2)  
@@ -346,6 +354,32 @@ local function onMessageReceived(messageData)
         table.remove(args, 1)  
         local message = table.concat(args, " ")  
         sendMessage(message)  
+    elseif command == ".safe" then  
+        if not safePlatform or not safePlatform.Parent then  
+            safePlatform = Instance.new("Part", Workspace)  
+            safePlatform.Name = "SafePlatform"  
+            safePlatform.Size = Vector3.new(50, 2, 50)  
+            safePlatform.Position = SAFE_PLATFORM_POS  
+            safePlatform.Anchored = true  
+            safePlatform.CanCollide = true  
+        end  
+        teleportTo(LP.Character, SAFE_PLATFORM_POS + Vector3.new(0, 5, 0))  
+    elseif command == ".unsafe" then  
+        if safePlatform and safePlatform.Parent then  
+            safePlatform:Destroy()  
+            safePlatform = nil  
+        end  
+        local spawns = Workspace:FindFirstChild("Spawns") or Workspace:FindFirstChild("SpawnLocation")  
+        if spawns and LP.Character then  
+            local spawnPoint = spawns:IsA("SpawnLocation") and spawns or spawns:GetChildren()[1]  
+            if spawnPoint then  
+                teleportTo(LP.Character, spawnPoint.Position + Vector3.new(0, 5, 0))  
+            else -- Failsafe: just respawn the character  
+                 LP.Character.Humanoid.Health = 0  
+            end  
+        else  
+            LP.Character.Humanoid.Health = 0 -- Failsafe if no spawns found  
+        end  
     end  
 end  
 
@@ -384,8 +418,11 @@ Players.PlayerRemoving:Connect(function(p)
         MainConnector = nil; table.clear(ConnectedUsers); table.clear(Whitelist)  
         sendMessage("Main Connector has left. Connection reset.")  
     end  
+    if safePlatform and #Players:GetPlayers() == 1 then -- cleanup platform if server is empty  
+        safePlatform:Destroy()  
+    end  
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed Testing - Floxy (Fixed by luxx v24)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v25)")  
 print("Floxy System Loaded. User Authorized.")
