@@ -1,13 +1,15 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v16)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v15)  
 
-    NEW FEATURES (v16):  
-    - Added a new `.bot` command to toggle botting functionality by simulating an 'X' key press.  
-    - The script now loads an external bot script from a URL on startup.  
+    BUG FIXES (v15):  
+    - Corrected the `.cmds` output to display the proper list of commands without incorrect descriptions.  
 
     Previous Features:  
-    - Corrected the `.cmds` output to display the proper list of commands.  
-    - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.).  
+    - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.) back to the `.cmds` output.  
+    - `.cmds` command output now only shows command names, without descriptions.  
+    - Curated `.cmds` command list.  
+    - Added a full `.cmds` command list.  
+    - Added `.reset`, `.shop`, `.refresh`, `.to`, `.follow` commands.  
     - Fixed critical execution and parsing errors.  
 ]]  
 
@@ -176,7 +178,6 @@ local function toggleBot()
     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.X, false, game)  
     task.wait(0.1)  
     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.X, false, game)  
-    sendMessage("Bot toggled.")  
 end  
 
 local function forceEquip(shouldEquip)  
@@ -381,5 +382,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v16)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v15)")  
 print("Floxy System Loaded. User Authorized.")
