@@ -1,16 +1,12 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v31)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v32)  
 
-    UPDATES (v31):  
+    UPDATES (v32):  
+    - Added `.unsafezone` command to stop the safezone loop.  
     - Removed descriptive text from the `.cmds` output for a cleaner look.  
     - Adjusted the delay in the `.cmds` function to 0.5 seconds between messages for improved reliability.  
-    - Modified `.safezone` to be a loop, continuously teleporting the player above the target. Use `.unfollow` to cancel.  
+    - Modified `.safezone` to be a loop, continuously teleporting the player above the target.  
     - Modified `.safe` command to continuously teleport the player upwards.  
-
-    Previous Features:  
-    - Split the `.cmds` command output into two messages for better readability.  
-    - Added `.safe` and `.unsafe` commands for a remote platform.  
-    - Added `.spam`, `.unspam`, and `.say` commands.  
 ]]  
 
 -- Services  
@@ -269,7 +265,7 @@ local function displayCommands()
 .to [user], .follow [user], .unfollow  
 ]]  
     local commandList_2 = [[  
-.safe, .unsafe, .safezone [user]  
+.safe, .unsafe, .safezone [user], .unsafezone  
 .refresh, .reset, .equip, .unequip  
 .shop (hops server)  
 .spam, .unspam, .say [msg]  
@@ -421,6 +417,8 @@ local function onMessageReceived(messageData)
             local targetPos = targetPlayer.Character.HumanoidRootPart.Position  
             teleportTo(LP.Character, targetPos + SAFE_ZONE_OFFSET)  
         end)  
+    elseif command == ".unsafezone" then  
+        stopSafeZoneLoop()  
     end  
 end  
 
@@ -465,5 +463,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v31)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v32)")  
 print("Floxy System Loaded. User Authorized.")
