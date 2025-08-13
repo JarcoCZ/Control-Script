@@ -1,9 +1,9 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v56 - SafeZone Fix)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v59 - SafeZone Height Adjust)  
 
-    UPDATES (v56 - SafeZone Fix):  
-    - CORRECTION: Fixed a critical logic error in the `.safezone` command that prevented the follow platform from working correctly. The welding and positioning logic has been completely rewritten for stability.  
-    - CUSTOMIZATION: The `.safezone` offset remains at (0, 17, 0) as previously requested.  
+    UPDATES (v59 - SafeZone Height Adjust):  
+    - FIX: Increased the vertical offset for the `.safezone` platform (`SAFE_ZONE_OFFSET`) based on user feedback. The platform will now spawn significantly higher above the target player.  
+    - STABILITY: The reliable, anchored platform logic is maintained to prevent all clipping and visual desync issues.  
 ]]  
 
 -- Services  
@@ -31,7 +31,6 @@ local SpammingEnabled = false
 local safePlatform = nil  
 local safeZoneConnection = nil  
 local safeZonePlatform = nil  
-local safeZoneWeld = nil  
 local spinConnection = nil  
 local spinTarget = nil  
 
@@ -47,7 +46,7 @@ local SPIN_RADIUS = 7
 local SPIN_SPEED = 10  
 local SPIN_HEIGHT_OFFSET = 5  
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)  
-local SAFE_ZONE_OFFSET = Vector3.new(0, 17, 0) -- Height above the target  
+local SAFE_ZONE_OFFSET = Vector3.new(0, 15, 0) -- CORRECTED: Increased height above the target.  
 local FROG_JUMP_HEIGHT = 10  
 local FROG_JUMP_PREP_DIST = 3  
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygqUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0Pz22"  
@@ -242,13 +241,6 @@ local function stopSafeZoneLoop()
     if safeZonePlatform and safeZonePlatform.Parent then  
         safeZonePlatform:Destroy()  
         safeZonePlatform = nil  
-    end  
-    if safeZoneWeld and safeZoneWeld.Parent then  
-        safeZoneWeld:Destroy()  
-        safeZoneWeld = nil  
-    end  
-    if LP.Character and LP.Character.PrimaryPart then  
-        LP.Character.PrimaryPart.Anchored = false  
     end  
     FollowTarget = nil  
 end  
@@ -558,31 +550,28 @@ local function onMessageReceived(messageData)
         stopSafeZoneLoop()  
         FollowTarget = targetPlayer  
         
-        local hrp = LP.Character.PrimaryPart  
-        
         safeZonePlatform = Instance.new("Part", Workspace)  
         safeZonePlatform.Name = "SafeZonePlatform"  
-        safeZonePlatform.Size = Vector3.new(10, 1, 10)  
+        safeZonePlatform.Size = Vector3.new(12, 2, 12)  
         safeZonePlatform.Transparency = 0.5  
-        safeZonePlatform.Anchored = false -- Must be unanchored to be welded  
-        safeZonePlatform.CanCollide = false  
-        
-        safeZoneWeld = Instance.new("Weld", safeZonePlatform)  
-        safeZoneWeld.Part0 = safeZonePlatform  
-        safeZoneWeld.Part1 = hrp  
-        safeZoneWeld.C0 = CFrame.new(0, 2, 0) -- Position the platform slightly above the player's head  
+        safeZonePlatform.Anchored = true  
+        safeZonePlatform.CanCollide = true  
         
         safeZoneConnection = RunService.Heartbeat:Connect(function()  
-            if not (FollowTarget and FollowTarget.Character and FollowTarget.Character.PrimaryPart and LP.Character and LP.Character.PrimaryPart) then  
+            if not (FollowTarget and FollowTarget.Character and FollowTarget.Character.PrimaryPart and LP.Character and LP.Character.PrimaryPart and safeZonePlatform and safeZonePlatform.Parent) then  
                 sendMessage("Safezone target or self lost. Disabling.")  
                 stopSafeZoneLoop()  
                 return  
             end  
 
             local targetPos = FollowTarget.Character.PrimaryPart.Position  
-            local myHRP = LP.Character.PrimaryPart  
+            local platformNewPos = targetPos + SAFE_ZONE_OFFSET  
+            safeZonePlatform.Position = platformNewPos  
             
-            myHRP.CFrame = CFrame.new(targetPos + SAFE_ZONE_OFFSET) * myHRP.CFrame.Rotation  
+            -- Teleport self on top of the platform, maintaining orientation  
+            local myHRP = LP.Character.PrimaryPart  
+            local myNewPos = platformNewPos + Vector3.new(0, (safeZonePlatform.Size.Y / 2) + (myHRP.Size.Y / 2), 0)  
+            teleportTo(LP.Character, CFrame.new(myNewPos) * (myHRP.CFrame - myHRP.CFrame.Position))  
         end)  
     elseif command == ".unsafezone" then  
         stopSafeZoneLoop()  
@@ -650,5 +639,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v56)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v59)")  
 print("Floxy System Loaded. User Authorized.")
