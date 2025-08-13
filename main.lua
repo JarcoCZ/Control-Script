@@ -1,14 +1,16 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v9)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v15)  
 
-    CRITICAL FIX:  
-    1.  EXECUTION FAILURE: Fixed a fatal error in the `findPlayer` function that occurred when commands without a player name (like `.reset`) were used. This error was causing the script's message handler to crash, making it seem like the script wasn't executing at all.  
-    2.  COMMAND PARSING: The `connect` command has been correctly restored to not use a period, matching the original script, while other commands retain their period. This was a regression in the last version.  
+    BUG FIXES (v15):  
+    - Corrected the `.cmds` output to display the proper list of commands without incorrect descriptions.  
 
-    Previous Fixes Maintained:  
-    -   Authorization check is correct.  
-    -   Kill loop and aura logic are functional.  
-    -   Player list management is correct.  
+    Previous Features:  
+    - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.) back to the `.cmds` output.  
+    - `.cmds` command output now only shows command names, without descriptions.  
+    - Curated `.cmds` command list.  
+    - Added a full `.cmds` command list.  
+    - Added `.reset`, `.shop`, `.refresh`, `.to`, `.follow` commands.  
+    - Fixed critical execution and parsing errors.  
 ]]  
 
 -- Services  
@@ -16,6 +18,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")  
 local TextChatService = game:GetService("TextChatService")  
 local TeleportService = game:GetService("TeleportService")  
+local HttpService = game:GetService("HttpService") -- For server hopping  
 
 -- Local Player & Script-Wide Variables  
 local LP = Players.LocalPlayer  
@@ -25,6 +28,7 @@ local Targets = {}
 local Whitelist = {}  
 local ConnectedUsers = {}  
 local DeathPositions = {}  
+local FollowTarget = nil  
 local MainConnector = nil  
 local ForceEquipConnection = nil  
 local HeartbeatConnection = nil  
@@ -51,7 +55,6 @@ local function isAuthorized(userId)
     return false  
 end  
 
--- This check now runs first. If not authorized, the script stops here.  
 if not isAuthorized(LP.UserId) then  
     warn("Floxy Script: User not authorized. Halting execution.")  
     return  
@@ -63,7 +66,6 @@ local function sendMessage(message)
     end)  
 end  
 
--- **FIXED**: This function is now safe and won't error if `partialName` is nil.  
 local function findPlayer(partialName)  
     if not partialName then return nil end  
     local lowerName = tostring(partialName):lower()  
@@ -133,6 +135,14 @@ end
 local function onHeartbeat()  
     if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then return end  
     local myPos = LP.Character.HumanoidRootPart.Position  
+    local myHumanoid = LP.Character:FindFirstChildOfClass("Humanoid")  
+
+    if FollowTarget and FollowTarget.Character and FollowTarget.Character:FindFirstChild("HumanoidRootPart") and myHumanoid then  
+        local targetPos = FollowTarget.Character.HumanoidRootPart.Position  
+        if (targetPos - myPos).Magnitude > 5 then  
+            myHumanoid:MoveTo(targetPos)  
+        end  
+    end  
 
     for _, tool in ipairs(LP.Character:GetDescendants()) do  
         if tool:IsA("Tool") then  
@@ -209,6 +219,39 @@ local function setAura(range)
     end  
 end  
 
+local function serverHop()  
+    local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))  
+    if servers and servers.data then  
+        local serverList = {}  
+        for _, server in ipairs(servers.data) do  
+            if type(server) == "table" and server.id ~= game.JobId and server.playing < server.maxPlayers then  
+                table.insert(serverList, server.id)  
+            end  
+        end  
+        if #serverList > 0 then  
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, serverList[math.random(1, #serverList)], LP)  
+        end  
+    end  
+end  
+
+local function displayCommands()  
+    -- Corrected command list as per user feedback  
+    local commandList = [[  
+Commands:  
+.loop  
+.unloop  
+.aura  
+.aura whitelist  
+.refresh  
+.reset  
+.follow  
+.unfollow  
+.to  
+.shop  
+]]  
+    sendMessage(commandList)  
+end  
+
 -- ==================================  
 -- ==      EVENT HANDLERS          ==  
 -- ==================================  
@@ -225,7 +268,6 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    -- **FIXED**: `connect` command is handled first and without a period.  
     if command == "connect" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
@@ -261,11 +303,29 @@ local function onMessageReceived(messageData)
         else setAura(arg2) end  
     elseif command == ".reset" and authorPlayer == LP then  
         TeleportService:Teleport(game.PlaceId, LP)  
+    elseif command == ".shop" and authorPlayer == LP then  
+        serverHop()  
     elseif command == ".refresh" and authorPlayer == LP then  
         if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then  
-            DeathPositions[LP.Name] = LP.Character.HumanoidRootPart.Position  
+            DeathPositions[LP.Name] = LP.Character.HumanoidRootPart.CFrame  
             LP.Character.Humanoid.Health = 0  
         end  
+    elseif command == ".to" and arg2 then  
+        local targetPlayer = findPlayer(arg2)  
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") and LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then  
+            LP.Character.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame  
+        end  
+    elseif command == ".follow" and arg2 then  
+        local targetPlayer = findPlayer(arg2)  
+        if targetPlayer then  
+            FollowTarget = targetPlayer  
+        else  
+            FollowTarget = nil  
+        end  
+    elseif command == ".unfollow" then  
+        FollowTarget = nil  
+    elseif command == ".cmds" then  
+        displayCommands()  
     end  
 end  
 
@@ -278,7 +338,7 @@ local function onCharacterAdded(char)
     
     if DeathPositions[LP.Name] then  
         local hrp = char:WaitForChild("HumanoidRootPart", 10)  
-        if hrp then task.wait(0.5); hrp.CFrame = CFrame.new(DeathPositions[LP.Name]); DeathPositions[LP.Name] = nil end  
+        if hrp then task.wait(0.5); hrp.CFrame = DeathPositions[LP.Name]; DeathPositions[LP.Name] = nil end  
     end  
     
     if not HeartbeatConnection or not HeartbeatConnection.Connected then  
@@ -299,6 +359,7 @@ Players.PlayerAdded:Connect(function(p) table.insert(PlayerList, p) end)
 Players.PlayerRemoving:Connect(function(p)  
     for i, pl in ipairs(PlayerList) do if pl == p then table.remove(PlayerList, i); break end end  
     for i, u in ipairs(ConnectedUsers) do if u == p then table.remove(ConnectedUsers, i); break end end  
+    if p == FollowTarget then FollowTarget = nil end  
     if MainConnector == p then  
         MainConnector = nil; table.clear(ConnectedUsers); table.clear(Whitelist)  
         sendMessage("Main Connector has left. Connection reset.")  
@@ -306,5 +367,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v9)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v15)")  
 print("Floxy System Loaded. User Authorized.")
