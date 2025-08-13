@@ -1,11 +1,9 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v57 - Final SafeZone Fix)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v58 - Final SafeZone Fix 2)  
 
-    UPDATES (v57 - Final SafeZone Fix):  
-    - REWRITE: The `.safezone` command has been completely rewritten to resolve network ownership and replication issues.  
-    - LOGIC CHANGE: Instead of welding, the script now creates a solid, anchored platform that smoothly follows the target. Your character is then teleported directly on top of this platform every frame.  
-    - VISUAL SYNC: This new method ensures that your position on the platform is consistent between your client, the server, and other players, eliminating the visual clipping and desynchronization.  
-    - PLATFORM ADJUSTMENT: The safezone platform is now slightly larger and thicker for better stability.  
+    UPDATES (v58 - Final SafeZone Fix 2):  
+    - FIX: Adjusted the `.safezone` vertical offset (`SAFE_ZONE_OFFSET`). The previous value was too high, causing the platform to spawn at head-level. The new value correctly places it above the target, so your feet land on it properly.  
+    - STABILITY: The reliable, anchored platform logic from v57 is maintained to prevent all clipping and visual desync issues.  
 ]]  
 
 -- Services  
@@ -48,7 +46,7 @@ local SPIN_RADIUS = 7
 local SPIN_SPEED = 10  
 local SPIN_HEIGHT_OFFSET = 5  
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)  
-local SAFE_ZONE_OFFSET = Vector3.new(0, 17, 0) -- Height above the target  
+local SAFE_ZONE_OFFSET = Vector3.new(0, 7, 0) -- CORRECTED: Height above the target.  
 local FROG_JUMP_HEIGHT = 10  
 local FROG_JUMP_PREP_DIST = 3  
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygqUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0Pz22"  
@@ -554,7 +552,7 @@ local function onMessageReceived(messageData)
         
         safeZonePlatform = Instance.new("Part", Workspace)  
         safeZonePlatform.Name = "SafeZonePlatform"  
-        safeZonePlatform.Size = Vector3.new(12, 2, 12) -- Made it thicker and larger  
+        safeZonePlatform.Size = Vector3.new(12, 2, 12)  
         safeZonePlatform.Transparency = 0.5  
         safeZonePlatform.Anchored = true  
         safeZonePlatform.CanCollide = true  
@@ -641,5 +639,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v57)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v58)")  
 print("Floxy System Loaded. User Authorized.")
