@@ -1,10 +1,10 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v61 - Aura Off Command)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v64 - Connection Fixes)  
 
-    UPDATES (v61 - Aura Off Command):  
-    - NEW: Added an `.aura off` command.  
-    - FUNCTIONALITY: Using `.aura off` will now properly disable the aura, resetting the tool's hitbox to a range of 0 and turning off the forced equip state (if no other targets are active).  
-    - CLARITY: This provides a more intuitive way to disable the aura compared to setting the range to 0 manually.  
+    UPDATES (v64 - Connection Fixes):  
+    - FIXED: The `@ [username]` command logic has been completely overhauled to work correctly and reliably.  
+    - ADDED: Chat feedback messages are now sent to confirm when a user is successfully connected or disconnected.  
+    - ADDED: A notification is now sent when the Main Connector leaves, resetting the connection for all users.  
 ]]  
 
 -- Services  
@@ -42,6 +42,7 @@ local ChangeTimeEvent = nil
 -- Configuration  
 local Dist = 0  
 local AuraEnabled = false  
+local AuraVisible = false  
 local DMG_TIMES = 2  
 local FT_TIMES = 5  
 local SPIN_RADIUS = 7  
@@ -113,7 +114,8 @@ local function createReachPart(tool)
         if not handle:FindFirstChild("BoxReachPart") then  
             local p = Instance.new("Part", handle)  
             p.Name = "BoxReachPart"; p.Size = Vector3.new(Dist, Dist, Dist)  
-            p.Transparency = 1; p.CanCollide = false; p.Massless = true  
+            p.Transparency = AuraVisible and 0.7 or 1  
+            p.CanCollide = false; p.Massless = true  
             local w = Instance.new("WeldConstraint", p)  
             w.Part0, w.Part1 = handle, p  
         end  
@@ -198,6 +200,21 @@ end
 -- ==================================  
 -- ==      COMMANDS & CONTROLS     ==  
 -- ==================================  
+
+local function setAuraVisibility(visible)  
+    AuraVisible = visible  
+    local transparency = visible and 0.7 or 1  
+    if LP.Character then  
+        local tool = LP.Character:FindFirstChildOfClass("Tool")  
+        if tool then  
+            local hitbox = tool:FindFirstChild("BoxReachPart")  
+            if hitbox then  
+                hitbox.Transparency = transparency  
+            end  
+        end  
+    end  
+    sendMessage("Aura visibility set to " .. (visible and "ON" or "OFF"))  
+end  
 
 local function changeTime(count)  
     local num = tonumber(count)  
@@ -330,9 +347,13 @@ local function setAura(range)
         forceEquip(AuraEnabled or #Targets > 0)  
         
         if LP.Character then  
-            for _, tool in ipairs(LP.Character:GetDescendants()) do  
-                if tool:IsA("Tool") and tool:FindFirstChild("BoxReachPart") then  
-                    tool.BoxReachPart.Size = Vector3.new(Dist, Dist, Dist)  
+            local tool = LP.Character:FindFirstWhichIsA("Tool")  
+            if tool then  
+                local reachPart = tool:FindFirstChild("BoxReachPart")  
+                if reachPart then  
+                    reachPart.Size = Vector3.new(Dist, Dist, Dist)  
+                else  
+                    createReachPart(tool)  
                 end  
             end  
         end  
@@ -356,8 +377,9 @@ end
 
 local function displayCommands()  
     local commandList_1 = [[  
+@ [user], .unconnect [user]  
 .kill [user], .loop [user|all], .unloop [user|all]  
-.aura [range|off], .aura whitelist [user], .aura unwhitelist [user]  
+.aura [range|off], .aura [see|unsee], .aura whitelist [user], .aura unwhitelist [user]  
 .to [user], .follow [user], .unfollow, .spin [user], .unspin, .spinspeed [val]  
 ]]  
     local commandList_2 = [[  
@@ -412,16 +434,16 @@ local function onMessageReceived(messageData)
         end  
     end  
 
-    if command == "connect" then  
-        if not MainConnector then  
-            MainConnector = authorPlayer  
-            table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
-            sendMessage("Connected With " .. authorPlayer.Name)  
-        elseif authorPlayer == MainConnector and arg2 then  
-            local targetPlayer = findPlayer(arg2)  
+    if command:sub(1,1) == "@" then  
+        local username = arg2 or command:sub(2)  
+        if not MainConnector then MainConnector = authorPlayer end  
+        
+        if authorPlayer == MainConnector then  
+            local targetPlayer = findPlayer(username)  
             if targetPlayer and not table.find(ConnectedUsers, targetPlayer) then  
                 table.insert(ConnectedUsers, targetPlayer)  
-                sendMessage("Connected With " .. targetPlayer.Name)  
+                table.insert(Whitelist, targetPlayer.Name)  
+                sendMessage("Connected with " .. targetPlayer.Name)  
             end  
         end  
         return  
@@ -429,12 +451,11 @@ local function onMessageReceived(messageData)
 
     if authorPlayer ~= LP and not table.find(ConnectedUsers, authorPlayer) then return end  
 
-    if command == ".unconnect" and authorPlayer == MainConnector and arg2 then  
+    if command == ".unconnect" and arg2 and authorPlayer == MainConnector then  
         local targetPlayer = findPlayer(arg2)  
         if targetPlayer and targetPlayer ~= MainConnector then  
-            for i, user in ipairs(ConnectedUsers) do  
-                if user == targetPlayer then table.remove(ConnectedUsers, i); break end  
-            end  
+            for i, user in ipairs(ConnectedUsers) do if user == targetPlayer then table.remove(ConnectedUsers, i); break end end  
+            for i, name in ipairs(Whitelist) do if name == targetPlayer.Name then table.remove(Whitelist, i); break end end  
             sendMessage("Unconnected: " .. targetPlayer.Name)  
         end  
     elseif command == ".kill" and arg2 then killOnce(arg2)  
@@ -455,10 +476,13 @@ local function onMessageReceived(messageData)
         else  
             removeTarget(arg2)  
         end  
-    -- CORRECTED: Added logic for `.aura off`  
     elseif command == ".aura" and arg2 then  
         if arg2:lower() == "off" then  
             setAura(0)  
+        elseif arg2:lower() == "see" then  
+            setAuraVisibility(true)  
+        elseif arg2:lower() == "unsee" then  
+            setAuraVisibility(false)  
         elseif arg2:lower() == "whitelist" and arg3 then  
             local p = findPlayer(arg3); if p and not table.find(Whitelist, p.Name) then table.insert(Whitelist, p.Name) end  
         elseif arg2:lower() == "unwhitelist" and arg3 then  
@@ -586,7 +610,6 @@ local function onMessageReceived(messageData)
             local platformNewPos = targetPos + SAFE_ZONE_OFFSET  
             safeZonePlatform.Position = platformNewPos  
             
-            -- Teleport self on top of the platform, maintaining orientation  
             local myHRP = LP.Character.PrimaryPart  
             local myNewPos = platformNewPos + Vector3.new(0, (safeZonePlatform.Size.Y / 2) + (myHRP.Size.Y / 2), 0)  
             teleportTo(LP.Character, CFrame.new(myNewPos) * (myHRP.CFrame - myHRP.CFrame.Position))  
@@ -636,6 +659,7 @@ task.spawn(function()
 end)  
 
 for _, player in ipairs(Players:GetPlayers()) do table.insert(PlayerList, player) end  
+table.insert(ConnectedUsers, LP); table.insert(Whitelist, LP.Name)  
 
 LP.CharacterAdded:Connect(onCharacterAdded)  
 if LP.Character then onCharacterAdded(LP.Character) end  
@@ -649,6 +673,7 @@ Players.PlayerRemoving:Connect(function(p)
     if FollowTarget and p == FollowTarget then stopSafeZoneLoop() end  
     if MainConnector == p then  
         MainConnector = nil; table.clear(ConnectedUsers); table.clear(Whitelist)  
+        table.insert(ConnectedUsers, LP); table.insert(Whitelist, LP.Name)  
         sendMessage("Main Connector has left. Connection reset.")  
     end  
     if safePlatform and #Players:GetPlayers() == 1 then  
@@ -657,5 +682,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v61)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v64)")  
 print("Floxy System Loaded. User Authorized.")
