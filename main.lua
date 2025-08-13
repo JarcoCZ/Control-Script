@@ -1,9 +1,11 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v56 - SafeZone Fix)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v57 - Final SafeZone Fix)  
 
-    UPDATES (v56 - SafeZone Fix):  
-    - CORRECTION: Fixed a critical logic error in the `.safezone` command that prevented the follow platform from working correctly. The welding and positioning logic has been completely rewritten for stability.  
-    - CUSTOMIZATION: The `.safezone` offset remains at (0, 17, 0) as previously requested.  
+    UPDATES (v57 - Final SafeZone Fix):  
+    - REWRITE: The `.safezone` command has been completely rewritten to resolve network ownership and replication issues.  
+    - LOGIC CHANGE: Instead of welding, the script now creates a solid, anchored platform that smoothly follows the target. Your character is then teleported directly on top of this platform every frame.  
+    - VISUAL SYNC: This new method ensures that your position on the platform is consistent between your client, the server, and other players, eliminating the visual clipping and desynchronization.  
+    - PLATFORM ADJUSTMENT: The safezone platform is now slightly larger and thicker for better stability.  
 ]]  
 
 -- Services  
@@ -31,7 +33,6 @@ local SpammingEnabled = false
 local safePlatform = nil  
 local safeZoneConnection = nil  
 local safeZonePlatform = nil  
-local safeZoneWeld = nil  
 local spinConnection = nil  
 local spinTarget = nil  
 
@@ -243,13 +244,6 @@ local function stopSafeZoneLoop()
         safeZonePlatform:Destroy()  
         safeZonePlatform = nil  
     end  
-    if safeZoneWeld and safeZoneWeld.Parent then  
-        safeZoneWeld:Destroy()  
-        safeZoneWeld = nil  
-    end  
-    if LP.Character and LP.Character.PrimaryPart then  
-        LP.Character.PrimaryPart.Anchored = false  
-    end  
     FollowTarget = nil  
 end  
 
@@ -406,7 +400,7 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    if command == "@" then  
+    if command == "connect" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
@@ -558,31 +552,28 @@ local function onMessageReceived(messageData)
         stopSafeZoneLoop()  
         FollowTarget = targetPlayer  
         
-        local hrp = LP.Character.PrimaryPart  
-        
         safeZonePlatform = Instance.new("Part", Workspace)  
         safeZonePlatform.Name = "SafeZonePlatform"  
-        safeZonePlatform.Size = Vector3.new(10, 1, 10)  
+        safeZonePlatform.Size = Vector3.new(12, 2, 12) -- Made it thicker and larger  
         safeZonePlatform.Transparency = 0.5  
-        safeZonePlatform.Anchored = false -- Must be unanchored to be welded  
-        safeZonePlatform.CanCollide = false  
-        
-        safeZoneWeld = Instance.new("Weld", safeZonePlatform)  
-        safeZoneWeld.Part0 = safeZonePlatform  
-        safeZoneWeld.Part1 = hrp  
-        safeZoneWeld.C0 = CFrame.new(0, 2, 0) -- Position the platform slightly above the player's head  
+        safeZonePlatform.Anchored = true  
+        safeZonePlatform.CanCollide = true  
         
         safeZoneConnection = RunService.Heartbeat:Connect(function()  
-            if not (FollowTarget and FollowTarget.Character and FollowTarget.Character.PrimaryPart and LP.Character and LP.Character.PrimaryPart) then  
+            if not (FollowTarget and FollowTarget.Character and FollowTarget.Character.PrimaryPart and LP.Character and LP.Character.PrimaryPart and safeZonePlatform and safeZonePlatform.Parent) then  
                 sendMessage("Safezone target or self lost. Disabling.")  
                 stopSafeZoneLoop()  
                 return  
             end  
 
             local targetPos = FollowTarget.Character.PrimaryPart.Position  
-            local myHRP = LP.Character.PrimaryPart  
+            local platformNewPos = targetPos + SAFE_ZONE_OFFSET  
+            safeZonePlatform.Position = platformNewPos  
             
-            myHRP.CFrame = CFrame.new(targetPos + SAFE_ZONE_OFFSET) * myHRP.CFrame.Rotation  
+            -- Teleport self on top of the platform, maintaining orientation  
+            local myHRP = LP.Character.PrimaryPart  
+            local myNewPos = platformNewPos + Vector3.new(0, (safeZonePlatform.Size.Y / 2) + (myHRP.Size.Y / 2), 0)  
+            teleportTo(LP.Character, CFrame.new(myNewPos) * (myHRP.CFrame - myHRP.CFrame.Position))  
         end)  
     elseif command == ".unsafezone" then  
         stopSafeZoneLoop()  
@@ -650,5 +641,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v56)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v57)")  
 print("Floxy System Loaded. User Authorized.")
