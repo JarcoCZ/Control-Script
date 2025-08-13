@@ -1,18 +1,17 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v19)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v20)  
 
-    UPDATES (v19):  
-    - Fixed the .reset command to reliably rejoin the current server.  
+    UPDATES (v20):  
+    - Modified the `.reset` command to explicitly use `game.PlaceId` for rejoining the server.  
 
     Previous Features:  
+    - Fixed the .reset command to reliably rejoin the current server.  
     - Changed the connection keyword to "test".  
-    - Changed .reset to make the player rejoin the current server.  
     - Added .equip and .unequip commands.  
     - Corrected the `.cmds` output to display the proper list of commands without incorrect descriptions.  
     - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.) back to the `.cmds` output.  
     - `.cmds` command output now only shows command names, without descriptions.  
     - Curated `.cmds` command list.  
-    - Added a full `.cmds` command list.  
     - Added `.reset`, `.shop`, `.refresh`, `.to`, `.follow` commands.  
     - Fixed critical execution and parsing errors.  
 ]]  
@@ -387,5 +386,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v19)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v20)")  
 print("Floxy System Loaded. User Authorized.")
