@@ -1,21 +1,13 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v10)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v12)  
 
-    NEW FEATURES (v10):  
-    - Added `reset` command: Rejoins the current server.  
-    - Added `shop` command: Server hops to a new, random public server.  
-    - Added `refresh` command: Resets the character and teleports back to the death position.  
-    - Added `to [player]` command: Teleports the local player to the specified player.  
-    - Added `follow [player]` command: Makes the local player continuously walk towards the specified player.  
+    NEW FEATURES (v12):  
+    - `.cmds` command now displays a curated list of commands as requested.  
 
-    CRITICAL FIX (v9):  
-    1.  EXECUTION FAILURE: Fixed a fatal error in the `findPlayer` function that occurred when commands without a player name (like `.reset`) were used. This error was causing the script's message handler to crash, making it seem like the script wasn't executing at all.  
-    2.  COMMAND PARSING: The `connect` command has been correctly restored to not use a period, matching the original script, while other commands retain their period. This was a regression in the last version.  
-
-    Previous Fixes Maintained:  
-    -   Authorization check is correct.  
-    -   Kill loop and aura logic are functional.  
-    -   Player list management is correct.  
+    Previous Features:  
+    - Added a full `.cmds` command list.  
+    - Added `.reset`, `.shop`, `.refresh`, `.to`, `.follow` commands.  
+    - Fixed critical execution and parsing errors.  
 ]]  
 
 -- Services  
@@ -60,7 +52,6 @@ local function isAuthorized(userId)
     return false  
 end  
 
--- This check now runs first. If not authorized, the script stops here.  
 if not isAuthorized(LP.UserId) then  
     warn("Floxy Script: User not authorized. Halting execution.")  
     return  
@@ -72,7 +63,6 @@ local function sendMessage(message)
     end)  
 end  
 
--- **FIXED**: This function is now safe and won't error if `partialName` is nil.  
 local function findPlayer(partialName)  
     if not partialName then return nil end  
     local lowerName = tostring(partialName):lower()  
@@ -144,15 +134,13 @@ local function onHeartbeat()
     local myPos = LP.Character.HumanoidRootPart.Position  
     local myHumanoid = LP.Character:FindFirstChildOfClass("Humanoid")  
 
-    -- Handle Follow Logic  
     if FollowTarget and FollowTarget.Character and FollowTarget.Character:FindFirstChild("HumanoidRootPart") and myHumanoid then  
         local targetPos = FollowTarget.Character.HumanoidRootPart.Position  
-        if (targetPos - myPos).Magnitude > 5 then -- Only move if further than 5 studs  
+        if (targetPos - myPos).Magnitude > 5 then  
             myHumanoid:MoveTo(targetPos)  
         end  
     end  
 
-    -- Handle Aura/Attack Logic  
     for _, tool in ipairs(LP.Character:GetDescendants()) do  
         if tool:IsA("Tool") then  
             local hitbox = tool:FindFirstChild("BoxReachPart") or tool:FindFirstChild("Handle")  
@@ -243,6 +231,18 @@ local function serverHop()
     end  
 end  
 
+local function displayCommands()  
+    -- Modified to only show the requested commands  
+    local commandList = [[  
+Commands:  
+.loop [user] - Attack a user repeatedly.  
+.unloop [user] - Stop attacking a user.  
+.aura [range] - Set attack aura range.  
+.aura whitelist [user] - Whitelist user from aura.  
+]]  
+    sendMessage(commandList)  
+end  
+
 -- ==================================  
 -- ==      EVENT HANDLERS          ==  
 -- ==================================  
@@ -259,7 +259,6 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    -- **FIXED**: `connect` command is handled first and without a period.  
     if command == "connect" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
@@ -293,7 +292,6 @@ local function onMessageReceived(messageData)
         elseif arg2:lower() == "unwhitelist" and arg3 then  
             local p = findPlayer(arg3); if p then for i, n in ipairs(Whitelist) do if n == p.Name then table.remove(Whitelist, i); break end end end  
         else setAura(arg2) end  
-    -- NEW COMMANDS  
     elseif command == ".reset" and authorPlayer == LP then  
         TeleportService:Teleport(game.PlaceId, LP)  
     elseif command == ".shop" and authorPlayer == LP then  
@@ -313,10 +311,12 @@ local function onMessageReceived(messageData)
         if targetPlayer then  
             FollowTarget = targetPlayer  
         else  
-            FollowTarget = nil -- Stop following if player not found  
+            FollowTarget = nil  
         end  
     elseif command == ".unfollow" then  
         FollowTarget = nil  
+    elseif command == ".cmds" then  
+        displayCommands()  
     end  
 end  
 
@@ -350,7 +350,7 @@ Players.PlayerAdded:Connect(function(p) table.insert(PlayerList, p) end)
 Players.PlayerRemoving:Connect(function(p)  
     for i, pl in ipairs(PlayerList) do if pl == p then table.remove(PlayerList, i); break end end  
     for i, u in ipairs(ConnectedUsers) do if u == p then table.remove(ConnectedUsers, i); break end end  
-    if p == FollowTarget then FollowTarget = nil end -- Stop following if the target leaves  
+    if p == FollowTarget then FollowTarget = nil end  
     if MainConnector == p then  
         MainConnector = nil; table.clear(ConnectedUsers); table.clear(Whitelist)  
         sendMessage("Main Connector has left. Connection reset.")  
@@ -358,5 +358,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v10)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v12)")  
 print("Floxy System Loaded. User Authorized.")
