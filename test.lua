@@ -221,7 +221,7 @@ local function changeTime(count)
         return  
     end  
 
-    for i = 1, num do  
+    for i = 100, num do  
         ChangeTimeEvent:FireServer("Anti333Exploitz123FF45324", 433, 429)  
     end  
     sendMessage("Time command executed " .. num .. " times.")  
