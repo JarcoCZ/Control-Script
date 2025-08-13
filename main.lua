@@ -1,10 +1,10 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v61 - Aura Off Command)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v62 - Aura Visibility)  
 
-    UPDATES (v61 - Aura Off Command):  
-    - NEW: Added an `.aura off` command.  
-    - FUNCTIONALITY: Using `.aura off` will now properly disable the aura, resetting the tool's hitbox to a range of 0 and turning off the forced equip state (if no other targets are active).  
-    - CLARITY: This provides a more intuitive way to disable the aura compared to setting the range to 0 manually.  
+    UPDATES (v62 - Aura Visibility):  
+    - NEW: Added `.aura see` command to make the hitbox slightly visible (0.7 transparency).  
+    - NEW: Added `.aura unsee` command to make the hitbox completely invisible again (default).  
+    - FUNCTIONALITY: The script now remembers your visibility choice and applies it whenever you equip a new tool.  
 ]]  
 
 -- Services  
@@ -42,6 +42,7 @@ local ChangeTimeEvent = nil
 -- Configuration  
 local Dist = 0  
 local AuraEnabled = false  
+local AuraVisible = false -- NEW: State for aura visibility  
 local DMG_TIMES = 2  
 local FT_TIMES = 5  
 local SPIN_RADIUS = 7  
@@ -113,7 +114,9 @@ local function createReachPart(tool)
         if not handle:FindFirstChild("BoxReachPart") then  
             local p = Instance.new("Part", handle)  
             p.Name = "BoxReachPart"; p.Size = Vector3.new(Dist, Dist, Dist)  
-            p.Transparency = 1; p.CanCollide = false; p.Massless = true  
+            -- CORRECTED: Set transparency based on the AuraVisible state  
+            p.Transparency = AuraVisible and 0.7 or 1  
+            p.CanCollide = false; p.Massless = true  
             local w = Instance.new("WeldConstraint", p)  
             w.Part0, w.Part1 = handle, p  
         end  
@@ -198,6 +201,22 @@ end
 -- ==================================  
 -- ==      COMMANDS & CONTROLS     ==  
 -- ==================================  
+
+local function setAuraVisibility(visible)  
+    AuraVisible = visible  
+    local transparency = visible and 0.7 or 1  
+    if LP.Character then  
+        for _, tool in ipairs(LP.Character:GetDescendants()) do  
+            if tool:IsA("Tool") then  
+                local hitbox = tool:FindFirstChild("BoxReachPart")  
+                if hitbox then  
+                    hitbox.Transparency = transparency  
+                end  
+            end  
+        end  
+    end  
+    sendMessage("Aura visibility set to " .. (visible and "ON" or "OFF"))  
+end  
 
 local function changeTime(count)  
     local num = tonumber(count)  
@@ -357,7 +376,7 @@ end
 local function displayCommands()  
     local commandList_1 = [[  
 .kill [user], .loop [user|all], .unloop [user|all]  
-.aura [range|off], .aura whitelist [user], .aura unwhitelist [user]  
+.aura [range|off], .aura [see|unsee], .aura whitelist [user], .aura unwhitelist [user]  
 .to [user], .follow [user], .unfollow, .spin [user], .unspin, .spinspeed [val]  
 ]]  
     local commandList_2 = [[  
@@ -412,7 +431,7 @@ local function onMessageReceived(messageData)
         end  
     end  
 
-    if command == "@" then  
+    if command == "connect" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
@@ -455,10 +474,14 @@ local function onMessageReceived(messageData)
         else  
             removeTarget(arg2)  
         end  
-    -- CORRECTED: Added logic for `.aura off`  
+    -- CORRECTED: Added logic for visibility commands  
     elseif command == ".aura" and arg2 then  
         if arg2:lower() == "off" then  
             setAura(0)  
+        elseif arg2:lower() == "see" then  
+            setAuraVisibility(true)  
+        elseif arg2:lower() == "unsee" then  
+            setAuraVisibility(false)  
         elseif arg2:lower() == "whitelist" and arg3 then  
             local p = findPlayer(arg3); if p and not table.find(Whitelist, p.Name) then table.insert(Whitelist, p.Name) end  
         elseif arg2:lower() == "unwhitelist" and arg3 then  
@@ -586,7 +609,6 @@ local function onMessageReceived(messageData)
             local platformNewPos = targetPos + SAFE_ZONE_OFFSET  
             safeZonePlatform.Position = platformNewPos  
             
-            -- Teleport self on top of the platform, maintaining orientation  
             local myHRP = LP.Character.PrimaryPart  
             local myNewPos = platformNewPos + Vector3.new(0, (safeZonePlatform.Size.Y / 2) + (myHRP.Size.Y / 2), 0)  
             teleportTo(LP.Character, CFrame.new(myNewPos) * (myHRP.CFrame - myHRP.CFrame.Position))  
@@ -657,5 +679,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v61)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v62)")  
 print("Floxy System Loaded. User Authorized.")
