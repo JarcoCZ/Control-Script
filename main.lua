@@ -1,13 +1,3 @@
---[[  
-    Floxy Script - Final Self-Executing Version (v25)  
-    By luxx & JarcoCZ  
-
-    REASON FOR FIX:  
-    -   The script is now wrapped in a main function that is called immediately.  
-    -   This removes the dependency on unreliable `loadstring()` functions in executors.  
-    -   This is the most robust way to ensure the script runs. The internal code is the proven and stable v24 logic.  
-]]  
-
 local main = function()  
     -- Services  
     local Players = game:GetService("Players")  
@@ -49,13 +39,16 @@ local main = function()
     end  
 
     local function sendMessage(message)  
-        pcall(function()  
+        local success, err = pcall(function()  
             if TextChatService and TextChatService.ChatInputBarConfiguration then  
                 TextChatService.ChatInputBarConfiguration.TargetTextChannel:SendAsync(message)  
             else  
                 ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(message, "All")  
             end  
         end)  
+        if not success then  
+            warn("Failed to send message: " .. tostring(err))  
+        end  
     end  
 
     local function findPlayer(partialName)  
@@ -83,6 +76,8 @@ local main = function()
                 p.Transparency = 1; p.CanCollide = false; p.Massless = true  
                 local w = Instance.new("WeldConstraint", p); w.Part0, w.Part1 = handle, p  
             end  
+        else  
+            warn("Tool has no Handle: " .. tostring(tool.Name))  
         end  
     end  
 
@@ -166,6 +161,7 @@ local main = function()
     end  
 
     local function startFollow(targetPlayer)  
+        if targetPlayer == LP then return end -- Don't follow self  
         stopFollow()  
         FollowTarget = targetPlayer  
         FollowConnection = RunService.RenderStepped:Connect(function()  
@@ -186,8 +182,11 @@ local main = function()
         local author = isNewChat and messageData.TextSource and Players:GetPlayerByUserId(messageData.TextSource.UserId) or LP  
         if not text or not author then return end  
 
-        local args = text:split(" ")  
-        local command = args[1]:lower()  
+        local args = {}  
+        for arg in text:gmatch("%S+") do  
+            table.insert(args, arg)  
+        end  
+        local command = args[1] and args[1]:lower() or ""  
         local arg2 = args[2]  
 
         if command == "connect" then  
@@ -239,6 +238,7 @@ local main = function()
         else for i, u in ipairs(ConnectedUsers) do if u == p then table.remove(ConnectedUsers, i); break end end  
         end  
         for i, n in ipairs(Targets) do if n == p.Name then table.remove(Targets, i); KillStates[p] = nil; break end end  
+        for i, n in ipairs(Whitelist) do if n == p.Name then table.remove(Whitelist, i); break end end  
     end)  
 
     task.spawn(function()  
