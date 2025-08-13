@@ -1,7 +1,8 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v32)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v33)  
 
-    UPDATES (v32):  
+    UPDATES (v33):  
+    - Modified `.unsafe` to teleport the player to the MainConnector's position after removing the platform. If no connector is present, it will default to the previous spawn/reset behavior.  
     - Added `.unsafezone` command to stop the safezone loop.  
     - Removed descriptive text from the `.cmds` output for a cleaner look.  
     - Adjusted the delay in the `.cmds` function to 0.5 seconds between messages for improved reliability.  
@@ -390,16 +391,20 @@ local function onMessageReceived(messageData)
             safePlatform:Destroy()  
             safePlatform = nil  
         end  
-        local spawns = Workspace:FindFirstChild("Spawns") or Workspace:FindFirstChild("SpawnLocation")  
-        if spawns and LP.Character then  
-            local spawnPoint = spawns:IsA("SpawnLocation") and spawns or spawns:GetChildren()[1]  
-            if spawnPoint then  
-                teleportTo(LP.Character, spawnPoint.Position + Vector3.new(0, 5, 0))  
-            else   
-                 LP.Character.Humanoid.Health = 0  
-            end  
+        if MainConnector and MainConnector.Character and MainConnector.Character:FindFirstChild("HumanoidRootPart") and LP.Character then  
+            teleportTo(LP.Character, MainConnector.Character.HumanoidRootPart.Position + Vector3.new(0, 5, 0))  
         else  
-            LP.Character.Humanoid.Health = 0  
+            local spawns = Workspace:FindFirstChild("Spawns") or Workspace:FindFirstChild("SpawnLocation")  
+            if spawns and LP.Character then  
+                local spawnPoint = spawns:IsA("SpawnLocation") and spawns or spawns:GetChildren()[1]  
+                if spawnPoint then  
+                    teleportTo(LP.Character, spawnPoint.Position + Vector3.new(0, 5, 0))  
+                else   
+                     LP.Character.Humanoid.Health = 0  
+                end  
+            else  
+                LP.Character.Humanoid.Health = 0  
+            end  
         end  
     elseif command == ".safezone" and arg2 then  
         local targetPlayer = findPlayer(arg2)  
@@ -463,5 +468,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v32)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v33)")  
 print("Floxy System Loaded. User Authorized.")
