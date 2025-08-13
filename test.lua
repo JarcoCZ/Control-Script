@@ -1,10 +1,11 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v18)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v19)  
 
-    UPDATES (v18):  
-    - Changed the connection keyword to "test".  
+    UPDATES (v19):  
+    - Fixed the .reset command to reliably rejoin the current server.  
 
     Previous Features:  
+    - Changed the connection keyword to "test".  
     - Changed .reset to make the player rejoin the current server.  
     - Added .equip and .unequip commands.  
     - Corrected the `.cmds` output to display the proper list of commands without incorrect descriptions.  
@@ -307,7 +308,7 @@ local function onMessageReceived(messageData)
             local p = findPlayer(arg3); if p then for i, n in ipairs(Whitelist) do if n == p.Name then table.remove(Whitelist, i); break end end end  
         else setAura(arg2) end  
     elseif command == ".reset" and authorPlayer == LP then  
-        pcall(TeleportService.TeleportToPlaceInstance, TeleportService, game.PlaceId, game.JobId, LP)  
+        TeleportService:Teleport(game.PlaceId, LP)  
     elseif command == ".shop" and authorPlayer == LP then  
         serverHop()  
     elseif command == ".refresh" and authorPlayer == LP then  
@@ -386,5 +387,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v18)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v19)")  
 print("Floxy System Loaded. User Authorized.")
