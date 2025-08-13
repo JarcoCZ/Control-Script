@@ -1,7 +1,8 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v34)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v35)  
 
-    UPDATES (v34):  
+    UPDATES (v35):  
+    - Removed the death confirmation message from the `.kill` command for silent operation.  
     - Added `.kill [user]` command. This command will loop-attack a player until they die, then automatically unloop them.  
     - Modified `.unsafe` to teleport the player to the MainConnector's position after removing the platform.  
     - Added `.unsafezone` command to stop the safezone loop.  
@@ -237,7 +238,6 @@ local function killOnce(playerName)
     local humanoid = player.Character:FindFirstChild("Humanoid")  
     local connection  
     connection = humanoid.Died:Connect(function()  
-        sendMessage("Target " .. playerName .. " eliminated. Unlooping.")  
         removeTarget(playerName)  
         if connection then connection:Disconnect() end  
     end)  
@@ -486,5 +486,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v34)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v35)")  
 print("Floxy System Loaded. User Authorized.")
