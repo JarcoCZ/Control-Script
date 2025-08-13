@@ -1,15 +1,15 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v16)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v17)  
 
-    NEW FEATURES (v16):  
-    - The `connect` command is now restricted to the whitelisted user ID (1588706905).  
-    - Unauthorized attempts to use `connect` will result in a "Connection rejected" message.  
+    NEW FEATURES (v17):  
+    - Implemented a strict "blacklist" system.  
+    - Only the primary UserID (1588706905) is authorized to execute the script. All other users are blocked.  
 
     Previous Features:  
+    - The `connect` command is now restricted to the whitelisted user ID.  
     - Corrected the `.cmds` output.  
-    - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.) back to the `.cmds` output.  
+    - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.).  
     - `.cmds` command output now only shows command names, without descriptions.  
-    - Added `.reset`, `.shop`, `.refresh`, `.to`, `.follow` commands.  
     - Fixed critical execution and parsing errors.  
 ]]  
 
@@ -22,6 +22,21 @@ local HttpService = game:GetService("HttpService") -- For server hopping
 
 -- Local Player & Script-Wide Variables  
 local LP = Players.LocalPlayer  
+
+-- Authorization  
+-- This is the ONLY user that can execute the script. Everyone else is blacklisted.  
+local PrimaryUserID = 1588706905   
+
+-- ==================================  
+-- ==   AUTHORIZATION & BLACKLIST  ==  
+-- ==================================  
+
+if LP.UserId ~= PrimaryUserID then  
+    warn("Floxy Script: User " .. LP.Name .. " (" .. tostring(LP.UserId) .. ") is not authorized. Halting execution.")  
+    return -- Stop the script entirely for any non-primary user  
+end  
+
+-- Script-Wide Variables (Only initialized if authorized)  
 local PlayerList = {}  
 local KillStates = {}  
 local Targets = {}  
@@ -39,27 +54,9 @@ local AuraEnabled = false
 local DMG_TIMES = 2  
 local FT_TIMES = 5  
 
--- Authorization  
-local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
-local ConnectWhitelist = 1588706905 -- The only UserID that can initiate connections  
-
 -- ==================================  
 -- ==      HELPER FUNCTIONS        ==  
 -- ==================================  
-
-local function isAuthorized(userId)  
-    for _, id in ipairs(AuthorizedUsers) do  
-        if userId == id then  
-            return true  
-        end  
-    end  
-    return false  
-end  
-
-if not isAuthorized(LP.UserId) then  
-    warn("Floxy Script: User not authorized. Halting execution.")  
-    return  
-end  
 
 local function sendMessage(message)  
     pcall(function()  
@@ -269,7 +266,7 @@ local function onMessageReceived(messageData)
     local arg3 = args[3] or nil  
 
     if command == "connect" then  
-        if authorPlayer.UserId ~= ConnectWhitelist then  
+        if authorPlayer.UserId ~= PrimaryUserID then  
             sendMessage("Connection rejected, not whitelisted.")  
             return  
         end  
@@ -372,5 +369,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v16)")  
-print("Floxy System Loaded. User Authorized.")
+sendMessage("Script Executed - Floxy (Fixed by luxx v17)")  
+print("Floxy System Loaded. User Authorized: " .. LP.Name)
