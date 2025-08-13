@@ -1,7 +1,8 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v52 - Reversion Update)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v53 - SafeZone Fix)  
 
-    UPDATES (v52 - Reversion Update):  
+    UPDATES (v53 - SafeZone Fix):  
+    - CORRECTION: The `.safezone` command now correctly creates the moving platform under the script executor, not the target. The executor will follow the target from a safe distance while remaining on their own moving platform.  
     - REVERSION: The `.time` command's loop now runs from 1 to the specified number, removing the previous "greater than 100" condition.  
     - CUSTOMIZATION: The `.safe` command no longer makes the player bounce up and down. It is now a single teleport to the safe platform.  
     - CUSTOMIZATION: Changed the `.fjump` height from 50 studs to exactly 10 studs as requested.  
@@ -11,8 +12,6 @@
     - NEW: Sends a Discord webhook notification on the executor's death, including the killer's name if available.  
     - NEW: Added `.spinspeed [value]` command to dynamically adjust the spin speed.  
     - ADJUSTMENT: The `.spin` command now elevates the user higher for a better orbital path.  
-    - ENHANCEMENT: The `.safezone` command now creates a moving, invisible platform under the target player.  
-    - Added `.ping` command to display the local player's current network latency.  
 ]]  
 
 -- Services  
@@ -176,7 +175,7 @@ local function onHeartbeat()
     local myPos = LP.Character.PrimaryPart.Position  
     local myHumanoid = LP.Character:FindFirstChildOfClass("Humanoid")  
 
-    if FollowTarget and FollowTarget.Character and FollowTarget.Character.PrimaryPart and myHumanoid then  
+    if FollowTarget and FollowTarget.Character and FollowTarget.Character.PrimaryPart and myHumanoid and not safeZoneConnection then  
         local targetPos = FollowTarget.Character.PrimaryPart.Position  
         if (targetPos - myPos).Magnitude > 5 then  
             myHumanoid:MoveTo(targetPos)  
@@ -221,7 +220,7 @@ local function changeTime(count)
         return  
     end  
 
-    for i = 100, num do  
+    for i = 1, num do  
         ChangeTimeEvent:FireServer("Anti333Exploitz123FF45324", 433, 429)  
     end  
     sendMessage("Time command executed " .. num .. " times.")  
@@ -257,6 +256,7 @@ local function stopSafeZoneLoop()
         safeZonePlatform:Destroy()  
         safeZonePlatform = nil  
     end  
+	FollowTarget = nil  
 end  
 
 local function forceEquip(shouldEquip)  
@@ -496,6 +496,7 @@ local function onMessageReceived(messageData)
             teleportTo(LP.Character, targetPlayer.Character.PrimaryPart.Position)  
         end  
     elseif command == ".follow" and arg2 then  
+        stopSafeZoneLoop()  
         local targetPlayer = findPlayer(arg2)  
         if targetPlayer then FollowTarget = targetPlayer else FollowTarget = nil end  
     elseif command == ".unfollow" then  
@@ -561,27 +562,32 @@ local function onMessageReceived(messageData)
         local targetPlayer = findPlayer(arg2)  
         if not targetPlayer then return end  
         stopSafeZoneLoop()  
+        FollowTarget = targetPlayer  
         
         if not safeZonePlatform or not safeZonePlatform.Parent then  
             safeZonePlatform = Instance.new("Part", Workspace)  
             safeZonePlatform.Name = "SafeZonePlatform"  
             safeZonePlatform.Size = Vector3.new(10, 1, 10)  
-            safeZonePlatform.Transparency = 1  
+            safeZonePlatform.Transparency = 0.5  
             safeZonePlatform.Anchored = true  
             safeZonePlatform.CanCollide = false  
         end  
         
         safeZoneConnection = RunService.Heartbeat:Connect(function()  
-            if not LP.Character or not LP.Character.PrimaryPart then stopSafeZoneLoop(); return end  
-            if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character or not targetPlayer.Character.PrimaryPart then  
+            if not (LP.Character and LP.Character.PrimaryPart) then stopSafeZoneLoop(); return end  
+            if not (FollowTarget and FollowTarget.Parent and FollowTarget.Character and FollowTarget.Character.PrimaryPart) then  
                 sendMessage("Safezone target lost. Disabling.")  
                 stopSafeZoneLoop()  
                 return  
             end  
-            local targetPos = targetPlayer.Character.PrimaryPart.Position  
-            teleportTo(LP.Character, targetPos + SAFE_ZONE_OFFSET)  
+
+            local myChar = LP.Character  
+            local targetPos = FollowTarget.Character.PrimaryPart.Position  
+            local myNewPos = targetPos + SAFE_ZONE_OFFSET  
+            
+            teleportTo(myChar, myNewPos)  
             if safeZonePlatform then  
-                safeZonePlatform.Position = targetPos + SAFE_ZONE_PLATFORM_OFFSET  
+                safeZonePlatform.Position = myNewPos + SAFE_ZONE_PLATFORM_OFFSET  
             end  
         end)  
     elseif command == ".unsafezone" then  
@@ -638,7 +644,7 @@ Players.PlayerRemoving:Connect(function(p)
     removeTarget(p.Name)  
     for i, pl in ipairs(PlayerList) do if pl == p then table.remove(PlayerList, i); break end end  
     for i, u in ipairs(ConnectedUsers) do if u == p then table.remove(ConnectedUsers, i); break end end  
-    if FollowTarget and p == FollowTarget then FollowTarget = nil; stopSafeZoneLoop() end  
+    if FollowTarget and p == FollowTarget then stopSafeZoneLoop() end  
     if MainConnector == p then  
         MainConnector = nil; table.clear(ConnectedUsers); table.clear(Whitelist)  
         sendMessage("Main Connector has left. Connection reset.")  
@@ -649,5 +655,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v52)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v53)")  
 print("Floxy System Loaded. User Authorized.")
