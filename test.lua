@@ -1,7 +1,10 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v39)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v42)  
 
-    UPDATES (v39):  
+    UPDATES (v42):  
+    - Added `.count` command to display the current player count vs the server maximum.  
+    - Added a server capacity check to the `.reset` command. It will not attempt to rejoin if the server is full.  
+    - Modified `.reset` to rejoin the current server instance, not just the place.  
     - Added `.loop all` to target all players in the server (except whitelisted ones).  
     - Added `.unloop all` to clear all targets.  
     - Fixed the `.spin` command by using the correct character teleport method (`SetPrimaryPartCFrame`).  
@@ -310,9 +313,8 @@ local function displayCommands()
 ]]  
     local commandList_2 = [[  
 .safe, .unsafe, .safezone [user], .unsafezone  
-.refresh, .reset, .equip, .unequip  
-.shop (hops server)  
-.spam, .unspam, .say [msg], .test  
+.refresh, .reset, .shop, .equip, .unequip  
+.spam, .unspam, .say [msg], .count, .test  
 ]]  
     sendMessage(commandList_1)  
     task.wait(0.5)  
@@ -390,7 +392,11 @@ local function onMessageReceived(messageData)
     elseif command == ".unspin" then  
         stopSpinLoop()  
     elseif command == ".reset" then  
-        TeleportService:Teleport(game.PlaceId, LP)  
+        if #Players:GetPlayers() >= Players.MaxPlayers then  
+            sendMessage("Won't rejoin, server is full.")  
+        else  
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)  
+        end  
     elseif command == ".shop" and authorPlayer == LP then  
         serverHop()  
     elseif command == ".refresh" then  
@@ -411,6 +417,10 @@ local function onMessageReceived(messageData)
         stopSafeZoneLoop()  
     elseif command == ".cmds" then  
         displayCommands()  
+    elseif command == ".count" then  
+        local playerCount = #Players:GetPlayers()  
+        local maxPlayers = Players.MaxPlayers  
+        sendMessage(playerCount .. "/" .. maxPlayers .. " players")  
     elseif command == ".equip" then  
         if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
             local tool = LP.Backpack:FindFirstChildWhichIsA("Tool")  
@@ -536,5 +546,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v39)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v42)")  
 print("Floxy System Loaded. User Authorized.")
