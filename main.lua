@@ -1,9 +1,12 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v59 - SafeZone Height Adjust)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v60 - Rejoin Confirmation)  
 
-    UPDATES (v59 - SafeZone Height Adjust):  
-    - FIX: Increased the vertical offset for the `.safezone` platform (`SAFE_ZONE_OFFSET`) based on user feedback. The platform will now spawn significantly higher above the target player.  
-    - STABILITY: The reliable, anchored platform logic is maintained to prevent all clipping and visual desync issues.  
+    UPDATES (v60 - Rejoin Confirmation):  
+    - NEW: Added a confirmation system for the `.reset` command. If the server is full, it will now ask "Wanna rejoin? Y/N".  
+    - NEW: The script will wait for a "y" or "n" response from you.  
+        - "y" will proceed with the rejoin attempt.  
+        - "n" will cancel the rejoin and send a "Rejoin Rejected!" message.  
+    - STABILITY: This prevents accidental rejoins into a full server and gives the user more control over the action.  
 ]]  
 
 -- Services  
@@ -33,6 +36,7 @@ local safeZoneConnection = nil
 local safeZonePlatform = nil  
 local spinConnection = nil  
 local spinTarget = nil  
+local AwaitingRejoinConfirmation = false -- CORRECTED: Added flag for new feature  
 
 -- Pre-loaded Instances  
 local ChangeTimeEvent = nil  
@@ -46,7 +50,7 @@ local SPIN_RADIUS = 7
 local SPIN_SPEED = 10  
 local SPIN_HEIGHT_OFFSET = 5  
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)  
-local SAFE_ZONE_OFFSET = Vector3.new(0, 15, 0) -- CORRECTED: Increased height above the target.  
+local SAFE_ZONE_OFFSET = Vector3.new(0, 15, 0)  
 local FROG_JUMP_HEIGHT = 10  
 local FROG_JUMP_PREP_DIST = 3  
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygqUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0Pz22"  
@@ -398,6 +402,19 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
+    -- CORRECTED: Handle rejoin confirmation logic  
+    if AwaitingRejoinConfirmation and authorPlayer == LP then  
+        if command == "y" then  
+            AwaitingRejoinConfirmation = false  
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)  
+            return -- Stop further processing  
+        elseif command == "n" then  
+            AwaitingRejoinConfirmation = false  
+            sendMessage("Rejoin Rejected!")  
+            return -- Stop further processing  
+        end  
+    end  
+
     if command == "connect" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
@@ -464,8 +481,10 @@ local function onMessageReceived(messageData)
         local ping = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())  
         sendMessage("ping: " .. ping .. "ms")  
     elseif command == ".reset" then  
+        -- CORRECTED: Modified rejoin logic  
         if #Players:GetPlayers() >= Players.MaxPlayers then  
-            sendMessage("Won't rejoin, server is full.")  
+            sendMessage("Wanna rejoin? Y/N")  
+            AwaitingRejoinConfirmation = true  
         else  
             TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)  
         end  
@@ -639,5 +658,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v59)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v60)")  
 print("Floxy System Loaded. User Authorized.")
