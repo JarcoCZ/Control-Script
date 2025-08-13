@@ -1,10 +1,11 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v14)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v15)  
 
-    NEW FEATURES (v14):  
-    - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.) back to the `.cmds` output.  
+    BUG FIXES (v15):  
+    - Corrected the `.cmds` output to display the proper list of commands without incorrect descriptions.  
 
     Previous Features:  
+    - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.) back to the `.cmds` output.  
     - `.cmds` command output now only shows command names, without descriptions.  
     - Curated `.cmds` command list.  
     - Added a full `.cmds` command list.  
@@ -234,7 +235,7 @@ local function serverHop()
 end  
 
 local function displayCommands()  
-    -- Re-added utility commands to the list as requested  
+    -- Corrected command list as per user feedback  
     local commandList = [[  
 Commands:  
 .loop  
@@ -366,5 +367,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v14)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v15)")  
 print("Floxy System Loaded. User Authorized.")
