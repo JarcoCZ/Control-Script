@@ -1,15 +1,14 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v29)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v30)  
 
-    UPDATES (v29):  
+    UPDATES (v30):  
+    - Adjusted the delay in the `.cmds` function to 0.5 seconds between messages for improved reliability.  
     - Modified `.safezone` to be a loop, continuously teleporting the player above the target. Use `.unfollow` to cancel.  
     - Modified `.safe` command to continuously teleport the player upwards.  
-    - Split the `.cmds` command output into two messages for better readability.  
 
     Previous Features:  
+    - Split the `.cmds` command output into two messages for better readability.  
     - Added `.safe` and `.unsafe` commands for a remote platform.  
-    - Fixed a critical typo in the `.refresh` command.  
-    - Modified `.refresh` and `.reset` to be executable by any connected user.  
     - Added `.spam`, `.unspam`, and `.say` commands.  
 ]]  
 
@@ -277,7 +276,7 @@ Server: .shop (hops server)
 Misc: .spam, .unspam, .say [msg]  
 ]]  
     sendMessage(commandList_1)  
-    task.wait(0.1) -- Small delay to ensure messages send in order  
+    task.wait(0.5) -- Adjusted delay  
     sendMessage(commandList_2)  
 end  
 
@@ -467,5 +466,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v29)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v30)")  
 print("Floxy System Loaded. User Authorized.")
