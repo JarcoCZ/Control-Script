@@ -1,10 +1,11 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v15)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v16)  
 
-    BUG FIXES (v15):  
-    - Corrected the `.cmds` output to display the proper list of commands without incorrect descriptions.  
+    BUG FIXES (v16):  
+    - Added .equip and .unequip commands.  
 
     Previous Features:  
+    - Corrected the `.cmds` output to display the proper list of commands without incorrect descriptions.  
     - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.) back to the `.cmds` output.  
     - `.cmds` command output now only shows command names, without descriptions.  
     - Curated `.cmds` command list.  
@@ -248,6 +249,8 @@ Commands:
 .unfollow  
 .to  
 .shop  
+.equip  
+.unequip  
 ]]  
     sendMessage(commandList)  
 end  
@@ -326,6 +329,20 @@ local function onMessageReceived(messageData)
         FollowTarget = nil  
     elseif command == ".cmds" then  
         displayCommands()  
+    elseif command == ".equip" then  
+        if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
+            local tool = LP.Backpack:FindFirstChildWhichIsA("Tool")  
+            if tool then  
+                LP.Character.Humanoid:EquipTool(tool)  
+            end  
+        end  
+    elseif command == ".unequip" then  
+        if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
+            local tool = LP.Character:FindFirstChildWhichIsA("Tool")  
+            if tool then  
+                tool.Parent = LP.Backpack  
+            end  
+        end  
     end  
 end  
 
@@ -367,5 +384,6 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v15)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v16)")
+sendMessage("If you find anyone using this script other than jckcjh7, FlexFightTerminator and defnotluxs. Please report it to luxx!")  
 print("Floxy System Loaded. User Authorized.")
