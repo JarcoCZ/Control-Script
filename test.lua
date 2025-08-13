@@ -1,9 +1,10 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v59 - SafeZone Height Adjust)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v61 - Aura Off Command)  
 
-    UPDATES (v59 - SafeZone Height Adjust):  
-    - FIX: Increased the vertical offset for the `.safezone` platform (`SAFE_ZONE_OFFSET`) based on user feedback. The platform will now spawn significantly higher above the target player.  
-    - STABILITY: The reliable, anchored platform logic is maintained to prevent all clipping and visual desync issues.  
+    UPDATES (v61 - Aura Off Command):  
+    - NEW: Added an `.aura off` command.  
+    - FUNCTIONALITY: Using `.aura off` will now properly disable the aura, resetting the tool's hitbox to a range of 0 and turning off the forced equip state (if no other targets are active).  
+    - CLARITY: This provides a more intuitive way to disable the aura compared to setting the range to 0 manually.  
 ]]  
 
 -- Services  
@@ -33,6 +34,7 @@ local safeZoneConnection = nil
 local safeZonePlatform = nil  
 local spinConnection = nil  
 local spinTarget = nil  
+local AwaitingRejoinConfirmation = false  
 
 -- Pre-loaded Instances  
 local ChangeTimeEvent = nil  
@@ -46,7 +48,7 @@ local SPIN_RADIUS = 7
 local SPIN_SPEED = 10  
 local SPIN_HEIGHT_OFFSET = 5  
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)  
-local SAFE_ZONE_OFFSET = Vector3.new(0, 15, 0) -- CORRECTED: Increased height above the target.  
+local SAFE_ZONE_OFFSET = Vector3.new(0, 15, 0)  
 local FROG_JUMP_HEIGHT = 10  
 local FROG_JUMP_PREP_DIST = 3  
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygqUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0Pz22"  
@@ -355,7 +357,7 @@ end
 local function displayCommands()  
     local commandList_1 = [[  
 .kill [user], .loop [user|all], .unloop [user|all]  
-.aura [range], .aura whitelist [user], .aura unwhitelist [user]  
+.aura [range|off], .aura whitelist [user], .aura unwhitelist [user]  
 .to [user], .follow [user], .unfollow, .spin [user], .unspin, .spinspeed [val]  
 ]]  
     local commandList_2 = [[  
@@ -397,6 +399,18 @@ local function onMessageReceived(messageData)
     local command = args[1]:lower()  
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
+
+    if AwaitingRejoinConfirmation and authorPlayer == LP then  
+        if command == "y" then  
+            AwaitingRejoinConfirmation = false  
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)  
+            return  
+        elseif command == "n" then  
+            AwaitingRejoinConfirmation = false  
+            sendMessage("Rejoin Rejected!")  
+            return  
+        end  
+    end  
 
     if command == "connect" then  
         if not MainConnector then  
@@ -441,8 +455,11 @@ local function onMessageReceived(messageData)
         else  
             removeTarget(arg2)  
         end  
+    -- CORRECTED: Added logic for `.aura off`  
     elseif command == ".aura" and arg2 then  
-        if arg2:lower() == "whitelist" and arg3 then  
+        if arg2:lower() == "off" then  
+            setAura(0)  
+        elseif arg2:lower() == "whitelist" and arg3 then  
             local p = findPlayer(arg3); if p and not table.find(Whitelist, p.Name) then table.insert(Whitelist, p.Name) end  
         elseif arg2:lower() == "unwhitelist" and arg3 then  
             local p = findPlayer(arg3); if p then for i, n in ipairs(Whitelist) do if n == p.Name then table.remove(Whitelist, i); break end end end  
@@ -465,7 +482,8 @@ local function onMessageReceived(messageData)
         sendMessage("ping: " .. ping .. "ms")  
     elseif command == ".reset" then  
         if #Players:GetPlayers() >= Players.MaxPlayers then  
-            sendMessage("Won't rejoin, server is full.")  
+            sendMessage("Wanna rejoin? Y/N")  
+            AwaitingRejoinConfirmation = true  
         else  
             TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)  
         end  
@@ -639,5 +657,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v59)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v61)")  
 print("Floxy System Loaded. User Authorized.")
