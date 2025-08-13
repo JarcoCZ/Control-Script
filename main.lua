@@ -1,12 +1,10 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v60 - Rejoin Confirmation)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v61 - Aura Off Command)  
 
-    UPDATES (v60 - Rejoin Confirmation):  
-    - NEW: Added a confirmation system for the `.reset` command. If the server is full, it will now ask "Wanna rejoin? Y/N".  
-    - NEW: The script will wait for a "y" or "n" response from you.  
-        - "y" will proceed with the rejoin attempt.  
-        - "n" will cancel the rejoin and send a "Rejoin Rejected!" message.  
-    - STABILITY: This prevents accidental rejoins into a full server and gives the user more control over the action.  
+    UPDATES (v61 - Aura Off Command):  
+    - NEW: Added an `.aura off` command.  
+    - FUNCTIONALITY: Using `.aura off` will now properly disable the aura, resetting the tool's hitbox to a range of 0 and turning off the forced equip state (if no other targets are active).  
+    - CLARITY: This provides a more intuitive way to disable the aura compared to setting the range to 0 manually.  
 ]]  
 
 -- Services  
@@ -36,7 +34,7 @@ local safeZoneConnection = nil
 local safeZonePlatform = nil  
 local spinConnection = nil  
 local spinTarget = nil  
-local AwaitingRejoinConfirmation = false -- CORRECTED: Added flag for new feature  
+local AwaitingRejoinConfirmation = false  
 
 -- Pre-loaded Instances  
 local ChangeTimeEvent = nil  
@@ -359,7 +357,7 @@ end
 local function displayCommands()  
     local commandList_1 = [[  
 .kill [user], .loop [user|all], .unloop [user|all]  
-.aura [range], .aura whitelist [user], .aura unwhitelist [user]  
+.aura [range|off], .aura whitelist [user], .aura unwhitelist [user]  
 .to [user], .follow [user], .unfollow, .spin [user], .unspin, .spinspeed [val]  
 ]]  
     local commandList_2 = [[  
@@ -402,16 +400,15 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    -- CORRECTED: Handle rejoin confirmation logic  
     if AwaitingRejoinConfirmation and authorPlayer == LP then  
         if command == "y" then  
             AwaitingRejoinConfirmation = false  
             TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)  
-            return -- Stop further processing  
+            return  
         elseif command == "n" then  
             AwaitingRejoinConfirmation = false  
             sendMessage("Rejoin Rejected!")  
-            return -- Stop further processing  
+            return  
         end  
     end  
 
@@ -458,8 +455,11 @@ local function onMessageReceived(messageData)
         else  
             removeTarget(arg2)  
         end  
+    -- CORRECTED: Added logic for `.aura off`  
     elseif command == ".aura" and arg2 then  
-        if arg2:lower() == "whitelist" and arg3 then  
+        if arg2:lower() == "off" then  
+            setAura(0)  
+        elseif arg2:lower() == "whitelist" and arg3 then  
             local p = findPlayer(arg3); if p and not table.find(Whitelist, p.Name) then table.insert(Whitelist, p.Name) end  
         elseif arg2:lower() == "unwhitelist" and arg3 then  
             local p = findPlayer(arg3); if p then for i, n in ipairs(Whitelist) do if n == p.Name then table.remove(Whitelist, i); break end end end  
@@ -481,7 +481,6 @@ local function onMessageReceived(messageData)
         local ping = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())  
         sendMessage("ping: " .. ping .. "ms")  
     elseif command == ".reset" then  
-        -- CORRECTED: Modified rejoin logic  
         if #Players:GetPlayers() >= Players.MaxPlayers then  
             sendMessage("Wanna rejoin? Y/N")  
             AwaitingRejoinConfirmation = true  
@@ -658,5 +657,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v60)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v61)")  
 print("Floxy System Loaded. User Authorized.")
