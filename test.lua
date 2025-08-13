@@ -1,7 +1,8 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v45 - Death Webhook)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v46 - Frog Jump)  
 
-    UPDATES (v45 - Death Webhook):  
+    UPDATES (v46 - Frog Jump):  
+    - NEW: Added a `.fjump` command that simulates a "frog jump" by teleporting the player upwards for a high jump effect.  
     - NEW: Sends a Discord webhook notification on the executor's death, including the killer's name if available.  
     - NEW: Added `.spinspeed [value]` command to dynamically adjust the spin speed.  
     - ADJUSTMENT: The `.spin` command now elevates the user higher for a better orbital path.  
@@ -49,6 +50,8 @@ local SPIN_HEIGHT_OFFSET = 5
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)  
 local SAFE_ZONE_OFFSET = Vector3.new(0, 20, 0)  
 local SAFE_ZONE_PLATFORM_OFFSET = Vector3.new(0, -3, 0)  
+local FROG_JUMP_HEIGHT = 50 -- How high the frog jump goes  
+local FROG_JUMP_PREP_DIST = 3 -- How far down it teleports before jumping  
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygqUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0Pz22"  
 
 
@@ -202,6 +205,19 @@ end
 -- ==      COMMANDS & CONTROLS     ==  
 -- ==================================  
 
+local function frogJump()  
+    local myChar = LP.Character  
+    if not (myChar and myChar.PrimaryPart) then return end  
+    
+    local startPos = myChar.PrimaryPart.Position  
+    local prepPos = startPos - Vector3.new(0, FROG_JUMP_PREP_DIST, 0)  
+    local finalPos = startPos + Vector3.new(0, FROG_JUMP_HEIGHT, 0)  
+    
+    teleportTo(myChar, prepPos)  
+    task.wait(0.05) -- Small delay for effect  
+    teleportTo(myChar, finalPos)  
+end  
+
 local function stopSpinLoop()  
     if spinConnection and spinConnection.Connected then  
         spinConnection:Disconnect()  
@@ -336,7 +352,7 @@ local function displayCommands()
 ]]  
     local commandList_2 = [[  
 .safe, .unsafe, .safezone [user], .unsafezone  
-.refresh, .reset, .shop, .equip, .unequip  
+.refresh, .reset, .shop, .equip, .unequip, .fjump  
 .spam, .unspam, .say [msg], .count, .ping, .test  
 ]]  
     sendMessage(commandList_1)  
@@ -477,6 +493,8 @@ local function onMessageReceived(messageData)
             local tool = LP.Character:FindFirstChildWhichIsA("Tool")  
             if tool then tool.Parent = LP.Backpack end  
         end  
+    elseif command == ".fjump" then  
+        frogJump()  
     elseif command == ".spam" then  
         SpammingEnabled = true  
     elseif command == ".unspam" then  
@@ -590,7 +608,7 @@ end
 for _, player in ipairs(Players:GetPlayers()) do table.insert(PlayerList, player) end  
 
 LP.CharacterAdded:Connect(onCharacterAdded)  
-if LP.Character then onCharacterAdded(LP.Character) end  
+if LP.Character then onCharacterAdded(LP.C_hat) end  
 
 Players.PlayerAdded:Connect(function(p) table.insert(PlayerList, p) end)  
 Players.PlayerRemoving:Connect(function(p)  
@@ -609,5 +627,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v45)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v46)")  
 print("Floxy System Loaded. User Authorized.")
