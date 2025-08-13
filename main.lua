@@ -1,9 +1,9 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v58 - Final SafeZone Fix 2)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v59 - SafeZone Height Adjust)  
 
-    UPDATES (v58 - Final SafeZone Fix 2):  
-    - FIX: Adjusted the `.safezone` vertical offset (`SAFE_ZONE_OFFSET`). The previous value was too high, causing the platform to spawn at head-level. The new value correctly places it above the target, so your feet land on it properly.  
-    - STABILITY: The reliable, anchored platform logic from v57 is maintained to prevent all clipping and visual desync issues.  
+    UPDATES (v59 - SafeZone Height Adjust):  
+    - FIX: Increased the vertical offset for the `.safezone` platform (`SAFE_ZONE_OFFSET`) based on user feedback. The platform will now spawn significantly higher above the target player.  
+    - STABILITY: The reliable, anchored platform logic is maintained to prevent all clipping and visual desync issues.  
 ]]  
 
 -- Services  
@@ -46,7 +46,7 @@ local SPIN_RADIUS = 7
 local SPIN_SPEED = 10  
 local SPIN_HEIGHT_OFFSET = 5  
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)  
-local SAFE_ZONE_OFFSET = Vector3.new(0, 7, 0) -- CORRECTED: Height above the target.  
+local SAFE_ZONE_OFFSET = Vector3.new(0, 15, 0) -- CORRECTED: Increased height above the target.  
 local FROG_JUMP_HEIGHT = 10  
 local FROG_JUMP_PREP_DIST = 3  
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygqUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0Pz22"  
@@ -639,5 +639,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v58)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v59)")  
 print("Floxy System Loaded. User Authorized.")
