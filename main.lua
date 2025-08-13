@@ -1,17 +1,12 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v24)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v32)  
 
-    UPDATES (v24):  
-    - Fixed a critical typo in the `.refresh` command ("HumanoidRootPpart" to "HumanoidRootPart") that prevented it from working.  
-    - Modified `.refresh` to be executable by any connected user.  
-
-    Previous Features:  
-    - Modified the `.reset` command to be executable by any connected user.  
-    - Added `.spam` and `.unspam` commands.  
-    - Added a `.say` command.  
-    - Fixed the .reset command to reliably rejoin the current server using game.PlaceId.  
-    - Changed the connection keyword to "test".  
-    - Added .equip and .unequip commands.  
+    UPDATES (v32):  
+    - Added `.unsafezone` command to stop the safezone loop.  
+    - Removed descriptive text from the `.cmds` output for a cleaner look.  
+    - Adjusted the delay in the `.cmds` function to 0.5 seconds between messages for improved reliability.  
+    - Modified `.safezone` to be a loop, continuously teleporting the player above the target.  
+    - Modified `.safe` command to continuously teleport the player upwards.  
 ]]  
 
 -- Services  
@@ -19,7 +14,8 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")  
 local TextChatService = game:GetService("TextChatService")  
 local TeleportService = game:GetService("TeleportService")  
-local HttpService = game:GetService("HttpService") -- For server hopping  
+local HttpService = game:GetService("HttpService")  
+local Workspace = game:GetService("Workspace")  
 
 -- Local Player & Script-Wide Variables  
 local LP = Players.LocalPlayer  
@@ -34,12 +30,17 @@ local MainConnector = nil
 local ForceEquipConnection = nil  
 local HeartbeatConnection = nil  
 local SpammingEnabled = false  
+local safePlatform = nil -- Variable to hold our safe platform  
+local safeTeleportConnection = nil -- Connection for the safe teleport loop  
+local safeZoneConnection = nil -- Connection for the safe zone loop  
 
 -- Configuration  
 local Dist = 0  
 local AuraEnabled = false  
 local DMG_TIMES = 2  
 local FT_TIMES = 5  
+local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0) -- High up in the sky  
+local SAFE_ZONE_OFFSET = Vector3.new(0, 20, 0) -- Offset for the safezone command  
 
 -- Authorization  
 local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
@@ -77,6 +78,12 @@ local function findPlayer(partialName)
         end  
     end  
     return nil  
+end  
+
+local function teleportTo(character, position)  
+    if character and character:FindFirstChild("HumanoidRootPart") then  
+        character.HumanoidRootPart.CFrame = CFrame.new(position)  
+    end  
 end  
 
 -- ==================================  
@@ -177,6 +184,13 @@ end
 -- ==      COMMANDS & CONTROLS     ==  
 -- ==================================  
 
+local function stopSafeZoneLoop()  
+    if safeZoneConnection and safeZoneConnection.Connected then  
+        safeZoneConnection:Disconnect()  
+        safeZoneConnection = nil  
+    end  
+end  
+
 local function forceEquip(shouldEquip)  
     if shouldEquip then  
         if not ForceEquipConnection then  
@@ -244,18 +258,21 @@ local function serverHop()
 end  
 
 local function displayCommands()  
-    local commandList = [[  
-Commands:  
-.loop, .unloop  
-.aura, .aura whitelist  
-.refresh, .reset  
-.follow, .unfollow  
-.to, .shop  
-.equip, .unequip  
-.spam, .unspam  
-.say  
+    local commandList_1 = [[  
+.loop [user], .unloop [user]  
+.aura [range], .unloop [user]  
+.aura whitelist [user], .aura unwhitelist [user]  
+.to [user], .follow [user], .unfollow  
 ]]  
-    sendMessage(commandList)  
+    local commandList_2 = [[  
+.safe, .unsafe, .safezone [user], .unsafezone  
+.refresh, .reset, .equip, .unequip  
+.shop (hops server)  
+.spam, .unspam, .say [msg]  
+]]  
+    sendMessage(commandList_1)  
+    task.wait(0.5) -- Adjusted delay  
+    sendMessage(commandList_2)  
 end  
 
 -- ==================================  
@@ -274,7 +291,7 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    if command == "@" then  
+    if command == "test" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
@@ -319,13 +336,14 @@ local function onMessageReceived(messageData)
     elseif command == ".to" and arg2 then  
         local targetPlayer = findPlayer(arg2)  
         if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") and LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then  
-            LP.Character.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame  
+            teleportTo(LP.Character, targetPlayer.Character.HumanoidRootPart.Position)  
         end  
     elseif command == ".follow" and arg2 then  
         local targetPlayer = findPlayer(arg2)  
         if targetPlayer then FollowTarget = targetPlayer else FollowTarget = nil end  
     elseif command == ".unfollow" then  
         FollowTarget = nil  
+        stopSafeZoneLoop()  
     elseif command == ".cmds" then  
         displayCommands()  
     elseif command == ".equip" then  
@@ -346,6 +364,61 @@ local function onMessageReceived(messageData)
         table.remove(args, 1)  
         local message = table.concat(args, " ")  
         sendMessage(message)  
+    elseif command == ".safe" then  
+        if not safePlatform or not safePlatform.Parent then  
+            safePlatform = Instance.new("Part", Workspace)  
+            safePlatform.Name = "SafePlatform"  
+            safePlatform.Size = Vector3.new(50, 2, 50)  
+            safePlatform.Position = SAFE_PLATFORM_POS  
+            safePlatform.Anchored = true  
+            safePlatform.CanCollide = true  
+        end  
+        teleportTo(LP.Character, SAFE_PLATFORM_POS + Vector3.new(0, 5, 0))  
+        if not safeTeleportConnection or not safeTeleportConnection.Connected then  
+            safeTeleportConnection = RunService.Heartbeat:Connect(function()  
+                if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") and safePlatform and safePlatform.Parent then  
+                    teleportTo(LP.Character, LP.Character.HumanoidRootPart.Position + Vector3.new(0, 1, 0))  
+                end  
+            end)  
+        end  
+    elseif command == ".unsafe" then  
+        if safeTeleportConnection and safeTeleportConnection.Connected then  
+            safeTeleportConnection:Disconnect()  
+            safeTeleportConnection = nil  
+        end  
+        if safePlatform and safePlatform.Parent then  
+            safePlatform:Destroy()  
+            safePlatform = nil  
+        end  
+        local spawns = Workspace:FindFirstChild("Spawns") or Workspace:FindFirstChild("SpawnLocation")  
+        if spawns and LP.Character then  
+            local spawnPoint = spawns:IsA("SpawnLocation") and spawns or spawns:GetChildren()[1]  
+            if spawnPoint then  
+                teleportTo(LP.Character, spawnPoint.Position + Vector3.new(0, 5, 0))  
+            else   
+                 LP.Character.Humanoid.Health = 0  
+            end  
+        else  
+            LP.Character.Humanoid.Health = 0  
+        end  
+    elseif command == ".safezone" and arg2 then  
+        local targetPlayer = findPlayer(arg2)  
+        if not targetPlayer then return end  
+
+        stopSafeZoneLoop() -- Stop any previous loop  
+
+        safeZoneConnection = RunService.Heartbeat:Connect(function()  
+            if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then stopSafeZoneLoop(); return end  
+            if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then  
+                sendMessage("Safezone target lost. Disabling.")  
+                stopSafeZoneLoop()  
+                return  
+            end  
+            local targetPos = targetPlayer.Character.HumanoidRootPart.Position  
+            teleportTo(LP.Character, targetPos + SAFE_ZONE_OFFSET)  
+        end)  
+    elseif command == ".unsafezone" then  
+        stopSafeZoneLoop()  
     end  
 end  
 
@@ -379,13 +452,16 @@ Players.PlayerAdded:Connect(function(p) table.insert(PlayerList, p) end)
 Players.PlayerRemoving:Connect(function(p)  
     for i, pl in ipairs(PlayerList) do if pl == p then table.remove(PlayerList, i); break end end  
     for i, u in ipairs(ConnectedUsers) do if u == p then table.remove(ConnectedUsers, i); break end end  
-    if p == FollowTarget then FollowTarget = nil end  
+    if p == FollowTarget then FollowTarget = nil; stopSafeZoneLoop() end  
     if MainConnector == p then  
         MainConnector = nil; table.clear(ConnectedUsers); table.clear(Whitelist)  
         sendMessage("Main Connector has left. Connection reset.")  
     end  
+    if safePlatform and #Players:GetPlayers() == 1 then -- cleanup platform if server is empty  
+        safePlatform:Destroy()  
+    end  
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v24)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v32)")  
 print("Floxy System Loaded. User Authorized.")
