@@ -1,12 +1,16 @@
 --[[  
-    Floxy Script - Final Parser Fix by luxx (v20)  
+    Floxy Script - Merged & Finalized (v22)  
+    By luxx & JarcoCZ  
 
-    REASON FOR CHANGE:  
-    -   I am incredibly sorry. I found the true source of the error. A typo at the end of the script (`onMessageMessageReceived` instead of `onMessageReceived`) was confusing the parser and causing it to report a misleading error on a completely different line.  
-    -   This typo has been corrected.  
-    -   The long `if/elseif` chain for commands has been broken into separate `if` statements for better stability and readability. This is a more robust way to handle commands.  
-
-    This version is now free of the parser error. My sincerest apologies for the repeated failures.  
+    This version merges the multi-user "connect" logic from v10 into the robust v21 framework.  
+    
+    FEATURES:  
+    -   All commands from both versions are present.  
+    -   Includes the robust chat handler to prevent silent errors.  
+    -   Maintains the local-mode commands (.reset, .refresh).  
+    -   Adds multi-user commands (connect, .unconnect).  
+    -   Adds MainConnector-relative commands (.to, .follow, .unfollow).  
+    -   Cleaned up and consolidated for stability.  
 ]]  
 
 -- ==================================  
@@ -19,6 +23,7 @@ local success, err = pcall(function()
     local RunService = game:GetService("RunService")  
     local TextChatService = game:GetService("TextChatService")  
     local TeleportService = game:GetService("TeleportService")  
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")  
 
     -- Local Player & Script-Wide Variables  
     local LP = Players.LocalPlayer  
@@ -31,6 +36,10 @@ local success, err = pcall(function()
     local HeartbeatConnection = nil  
     local FollowConnection = nil  
 
+    -- Networking Variables  
+    local MainConnector = nil  
+    local ConnectedUsers = {}  
+
     -- Configuration  
     local Dist = 0  
     local AuraEnabled = false  
@@ -38,7 +47,7 @@ local success, err = pcall(function()
     local FT_TIMES = 5  
 
     -- Authorization  
-    local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 } -- Example UserIDs  
+    local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
 
     -- ==================================  
     -- ==      HELPER FUNCTIONS        ==  
@@ -51,7 +60,11 @@ local success, err = pcall(function()
 
     local function sendMessage(message)  
         pcall(function()  
-            TextChatService.ChatInputBarConfiguration.TargetTextChannel:SendAsync(message)  
+            if TextChatService and TextChatService.ChatInputBarConfiguration then  
+                TextChatService.ChatInputBarConfiguration.TargetTextChannel:SendAsync(message)  
+            else -- Fallback for older chat systems  
+                ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(message, "All")  
+            end  
         end)  
     end  
 
@@ -97,7 +110,7 @@ local success, err = pcall(function()
         task.spawn(function()  
             while KillStates[player] and player.Parent and LP.Character do  
                 local targetChar = player.Character; local myChar = LP.Character  
-                local tool = toolPart.Parent  
+                local tool = toolPart and toolPart.Parent  
                 if not (targetChar and targetChar:FindFirstChildOfClass("Humanoid") and targetChar.Humanoid.Health > 0 and myChar and tool and tool.Parent == myChar) then  
                     break  
                 end  
@@ -188,55 +201,69 @@ local success, err = pcall(function()
     -- ==      EVENT HANDLERS          ==  
     -- ==================================  
 
-    local function onMessageReceived(messageData)  
-        if not messageData.Text or not messageData.TextSource or messageData.TextSource.UserId ~= LP.UserId then return end  
+    local function onMessageReceived(messageData, isNewChat)  
+        local text = isNewChat and messageData.Text or messageData  
+        local author = isNewChat and messageData.TextSource and Players:GetPlayerByUserId(messageData.TextSource.UserId) or LP  
+        if not text or not author then return end  
         
-        local text = messageData.Text  
         local args = text:split(" ")  
         local command = args[1]:lower()  
         local arg2 = args[2] or nil  
-        local arg3 = args[3] or nil  
         
-        if command == ".cmds" then  
-            sendMessage("Cmds: .loop, .unloop, .aura, .whitelist, .unwhitelist, .to, .follow, .unfollow, .reset, .refresh")  
+        -- Networking Commands  
+        if command == "connect" then  
+            if not MainConnector then  
+                MainConnector = author  
+                table.insert(ConnectedUsers, author)  
+                table.insert(Whitelist, author.Name)  
+                sendMessage("Main Connector set to: " .. author.Name)  
+            elseif author == MainConnector and arg2 then  
+                local p = findPlayer(arg2)  
+                if p and not table.find(ConnectedUsers, p) then  
+                    table.insert(ConnectedUsers, p)  
+                    sendMessage("Connected user: " .. p.Name)  
+                end  
+            end  
+            return -- End here for connect command  
         end  
-        if command == ".test" then  
-            sendMessage("Floxy (v20) Local Test Successful.")  
+
+        -- Check if user is authorized to run commands  
+        if author ~= LP and not table.find(ConnectedUsers, author) then  
+            return  
         end  
-        if command == ".reset" then  
-             TeleportService:Teleport(game.PlaceId, LP)  
+
+        -- Main Commands  
+        if command == ".cmds" then sendMessage("Cmds: .loop, .unloop, .aura, .whitelist, .unwhitelist, .to, .follow, .unfollow, .reset, .refresh, connect, .unconnect") end  
+        if command == ".unconnect" and author == MainConnector and arg2 then  
+            local p = findPlayer(arg2)  
+            if p and p ~= MainConnector then  
+                for i, user in ipairs(ConnectedUsers) do if user == p then table.remove(ConnectedUsers, i); break end end  
+                sendMessage("Unconnected: " .. p.Name)  
+            end  
         end  
-        if command == ".refresh" then  
+        if command == ".reset" and author == LP then TeleportService:Teleport(game.PlaceId, LP) end  
+        if command == ".refresh" and author == LP then  
             if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then  
                 DeathPositions[LP.Name] = LP.Character.HumanoidRootPart.Position  
                 LP.Character.Humanoid.Health = 0  
             end  
         end  
-        if command == ".loop" and arg2 then  
-             local p = findPlayer(arg2); if p and not table.find(Targets, p.Name) then table.insert(Targets, p.Name); forceEquip(true) end  
-        end  
-        if command == ".unloop" and arg2 then  
-             local p = findPlayer(arg2); if p then for i, name in ipairs(Targets) do if name == p.Name then table.remove(Targets, i); break end end; if #Targets == 0 and not AuraEnabled then forceEquip(false) end  
-        end  
+        if command == ".loop" and arg2 then local p = findPlayer(arg2); if p and not table.find(Targets, p.Name) then table.insert(Targets, p.Name); forceEquip(true) end end  
+        if command == ".unloop" and arg2 then local p = findPlayer(arg2); if p then for i, name in ipairs(Targets) do if name == p.Name then table.remove(Targets, i); break end end; if #Targets == 0 and not AuraEnabled then forceEquip(false) end end  
         if command == ".aura" and arg2 then  
             local newRange = tonumber(arg2)  
             if newRange and newRange >= 0 then  
-                Dist = newRange  
-                AuraEnabled = newRange > 0  
+                Dist = newRange; AuraEnabled = newRange > 0  
                 if AuraEnabled then forceEquip(true) elseif #Targets == 0 then forceEquip(false) end  
                 if LP.Character then for _, tool in ipairs(LP.Character:GetDescendants()) do if tool:IsA("Tool") and tool:FindFirstChild("BoxReachPart") then tool.BoxReachPart.Size = Vector3.new(Dist, Dist, Dist) end end end  
             end  
         end  
-		if command == ".whitelist" and arg2 then  
-			local p = findPlayer(arg2); if p and not table.find(Whitelist, p.Name) then table.insert(Whitelist, p.Name) end  
-		end  
-		if command == ".unwhitelist" and arg2 then  
-			local p = findPlayer(arg2); if p then for i, n in ipairs(Whitelist) do if n == p.Name then table.remove(Whitelist, i); break end end  
-		end  
-        if command == ".to" and arg2 then  
+		if command == ".whitelist" and arg2 then local p = findPlayer(arg2); if p and not table.find(Whitelist, p.Name) then table.insert(Whitelist, p.Name) end end  
+		if command == ".unwhitelist" and arg2 then local p = findPlayer(arg2); if p then for i, n in ipairs(Whitelist) do if n == p.Name then table.remove(Whitelist, i); break end end end  
+        if command == ".to" and arg2 then -- Teleport to any specified player  
             local p = findPlayer(arg2); if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then LP.Character.HumanoidRootPart.CFrame = p.Character.HumanoidRootPart.CFrame end  
         end  
-        if command == ".follow" and arg2 then  
+        if command == ".follow" and arg2 then -- Follow any specified player  
             local p = findPlayer(arg2); if p then startFollow(p) end  
         end  
         if command == ".unfollow" then  
@@ -248,14 +275,11 @@ local success, err = pcall(function()
         char:WaitForChild("Humanoid", 10)  
         for _, item in ipairs(char:GetChildren()) do createReachPart(item) end  
         char.ChildAdded:Connect(createReachPart)  
-        
         if #Targets > 0 or AuraEnabled then forceEquip(true) end  
-        
         if DeathPositions[LP.Name] then  
             local hrp = char:WaitForChild("HumanoidRootPart", 10)  
             if hrp then task.wait(0.5); hrp.CFrame = CFrame.new(DeathPositions[LP.Name]); DeathPositions[LP.Name] = nil end  
         end  
-        
         if not HeartbeatConnection or not HeartbeatConnection.Connected then  
             HeartbeatConnection = RunService.Heartbeat:Connect(onHeartbeat)  
         end  
@@ -267,22 +291,38 @@ local success, err = pcall(function()
 
     LP.CharacterAdded:Connect(onCharacterAdded)  
     if LP.Character then onCharacterAdded(LP.Character) end  
-
+    
     Players.PlayerRemoving:Connect(function(p)  
+        for i, user in ipairs(ConnectedUsers) do if user == p then table.remove(ConnectedUsers, i); break end end  
+        if MainConnector == p then  
+            MainConnector = nil; table.clear(ConnectedUsers); table.clear(Whitelist)  
+            stopFollow()  
+            sendMessage("Main Connector has left. Connection reset.")  
+        end  
         if FollowTarget == p then stopFollow() end  
     end)  
 
-    -- *** THIS IS THE CORRECTED LINE ***  
-    TextChatService.MessageReceived:Connect(onMessageReceived)  
+    -- ROBUST CHAT INITIALIZER  
+    task.spawn(function()  
+        local chatSuccess, _ = pcall(function()  
+            if TextChatService and TextChatService.MessageReceived then  
+                TextChatService.MessageReceived:Connect(function(message) onMessageREDDIT SUX(message, true) end)  
+            elseif LP.Chatted then  
+                LP.Chatted:Connect(function(message) onMessageReceived(message, false) end)  
+            else  
+                 warn("Floxy: No chat service found.")  
+            end  
+        end)  
+        if not chatSuccess then warn("Floxy: Could not connect to any chat service.") end  
+    end)  
 
-    sendMessage("Floxy Local Script (v20 by luxx) Executed.")  
-    print("Floxy System (v20) Loaded. User Authorized. Running in Purely Local Mode.")  
+    sendMessage("Floxy Merged Script (v22) Executed.")  
+    print("Floxy System (v22) Loaded. User Authorized.")  
 end)  
 
--- If the pcall failed, this will run.  
 if not success then  
-    print("----------- FLOXY SCRIPT (v20) FAILED TO INITIALIZE -----------")  
-    warn("----------- FLOXY SCRIPT (v20) FAILED TO INITIALIZE -----------")  
+    print("----------- FLOXY SCRIPT (v22) FAILED TO INITIALIZE -----------")  
+    warn("----------- FLOXY SCRIPT (v22) FAILED TO INITIALIZE -----------")  
     warn("ERROR: " .. tostring(err))  
     print("---------------------------------------------------------")  
 end
