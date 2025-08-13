@@ -1,16 +1,15 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v25)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v26)  
 
-    UPDATES (v25):  
-    - Added `.safe` command: Creates a platform high in the sky and teleports the user to it. Can be triggered by connected users.  
-    - Added `.unsafe` command: Teleports the user back to a spawn point. Can be triggered by connected users.  
-    - Cleaned up the `.cmds` command list for better readability.  
+    UPDATES (v26):  
+    - Added `.safezone [username]` command: Teleports you 20 studs directly above the specified player.  
+    - Updated command list with the new command.  
 
     Previous Features:  
+    - Added `.safe` and `.unsafe` commands for a remote platform.  
     - Fixed a critical typo in the `.refresh` command.  
     - Modified `.refresh` and `.reset` to be executable by any connected user.  
     - Added `.spam`, `.unspam`, and `.say` commands.  
-    - Changed the connection keyword to "test".  
 ]]  
 
 -- Services  
@@ -258,7 +257,7 @@ Loop Attack: .loop [user], .unloop [user]
 Aura Attack: .aura [range], .unloop [user]  
 Whitelist: .aura whitelist [user], .aura unwhitelist [user]  
 Movement: .to [user], .follow [user], .unfollow  
-Safe Zone: .safe, .unsafe  
+Safe Zone: .safe, .unsafe, .safezone [user]  
 Character: .refresh, .reset, .equip, .unequip  
 Server: .shop (hops server)  
 Misc: .spam, .unspam, .say [msg]  
@@ -380,6 +379,12 @@ local function onMessageReceived(messageData)
         else  
             LP.Character.Humanoid.Health = 0 -- Failsafe if no spawns found  
         end  
+    elseif command == ".safezone" and arg2 then  
+        local targetPlayer = findPlayer(arg2)  
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") and LP.Character then  
+            local targetPos = targetPlayer.Character.HumanoidRootPart.Position  
+            teleportTo(LP.Character, targetPos + Vector3.new(0, 20, 0))  
+        end  
     end  
 end  
 
@@ -424,5 +429,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v25)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v26)")  
 print("Floxy System Loaded. User Authorized.")
