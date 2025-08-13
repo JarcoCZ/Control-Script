@@ -1,10 +1,13 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v43 - SafeZone Platform, Ping & Spin Fix)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v45 - Death Webhook)  
 
-    UPDATES (v43 - SafeZone Platform, Ping & Spin Fix):  
-    - ENHANCEMENT: The `.safezone` command now creates a moving, invisible platform under the target player for better elevation and stability.  
+    UPDATES (v45 - Death Webhook):  
+    - NEW: Sends a Discord webhook notification on the executor's death, including the killer's name if available.  
+    - NEW: Added `.spinspeed [value]` command to dynamically adjust the spin speed.  
+    - ADJUSTMENT: The `.spin` command now elevates the user higher for a better orbital path.  
+    - ENHANCEMENT: The `.safezone` command now creates a moving, invisible platform under the target player.  
     - Added `.ping` command to display the local player's current network latency.  
-    - CRITICAL FIX: The `.spin` command was failing because the `teleportTo` function did not correctly handle CFrame values.  
+    - CRITICAL FIX: Resolved a crash in the `.spin` command by correcting the `teleportTo` function.  
 ]]  
 
 -- Services  
@@ -31,7 +34,7 @@ local SpammingEnabled = false
 local safePlatform = nil  
 local safeTeleportConnection = nil  
 local safeZoneConnection = nil  
-local safeZonePlatform = nil -- New variable for the safezone platform  
+local safeZonePlatform = nil  
 local spinConnection = nil  
 local spinTarget = nil  
 
@@ -41,10 +44,13 @@ local AuraEnabled = false
 local DMG_TIMES = 2  
 local FT_TIMES = 5  
 local SPIN_RADIUS = 7  
-local SPIN_SPEED = 15  
+local SPIN_SPEED = 10 -- Default spin speed  
+local SPIN_HEIGHT_OFFSET = 5  
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)  
 local SAFE_ZONE_OFFSET = Vector3.new(0, 20, 0)  
-local SAFE_ZONE_PLATFORM_OFFSET = Vector3.new(0, -3, 0) -- Offset for platform below player  
+local SAFE_ZONE_PLATFORM_OFFSET = Vector3.new(0, -3, 0)  
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygqUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0Pz22"  
+
 
 -- Authorization  
 local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
@@ -62,6 +68,16 @@ if not isAuthorized(LP.UserId) then
     warn("Floxy Script: User not authorized. Halting execution.")  
     return  
 end  
+
+local function sendWebhook(payload)  
+    local success, response = pcall(function()  
+        HttpService:PostAsync(WEBHOOK_URL, HttpService:JSONEncode(payload))  
+    end)  
+    if not success then  
+        warn("Failed to send webhook:", response)  
+    end  
+end  
+
 
 local function sendMessage(message)  
     pcall(function()  
@@ -273,7 +289,7 @@ local function spinLoop()
         local x = targetPos.X + SPIN_RADIUS * math.cos(angle)  
         local z = targetPos.Z + SPIN_RADIUS * math.sin(angle)  
         
-        local myNewPos = Vector3.new(x, targetPos.Y, z)  
+        local myNewPos = Vector3.new(x, targetPos.Y + SPIN_HEIGHT_OFFSET, z)  
         local lookAtPos = Vector3.new(targetPos.X, myNewPos.Y, targetPos.Z)  
         
         teleportTo(LP.Character, CFrame.new(myNewPos, lookAtPos))  
@@ -316,7 +332,7 @@ local function displayCommands()
     local commandList_1 = [[  
 .kill [user], .loop [user|all], .unloop [user|all]  
 .aura [range], .aura whitelist [user], .aura unwhitelist [user]  
-.to [user], .follow [user], .unfollow, .spin [user], .unspin  
+.to [user], .follow [user], .unfollow, .spin [user], .unspin, .spinspeed [val]  
 ]]  
     local commandList_2 = [[  
 .safe, .unsafe, .safezone [user], .unsafezone  
@@ -332,6 +348,20 @@ end
 -- ==      EVENT HANDLERS          ==  
 -- ==================================  
 
+local function onCharacterDied(humanoid)  
+    local killerTag = humanoid:FindFirstChild("creator")  
+    local killerName = "Unknown"  
+    if killerTag and killerTag.Value then  
+        killerName = killerTag.Value.Name  
+    end  
+    
+    local payload = {  
+        content = "Player " .. LP.Name .. " died. Killed by: " .. killerName,  
+        username = "Death Notifier"  
+    }  
+    sendWebhook(payload)  
+end  
+
 local function onMessageReceived(messageData)  
     local text = messageData.Text  
     if not text or not messageData.TextSource then return end  
@@ -344,7 +374,7 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    if command == "@" then  
+    if command == "connect" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
@@ -398,6 +428,12 @@ local function onMessageReceived(messageData)
         if p then spinTarget = p; spinLoop() end  
     elseif command == ".unspin" then  
         stopSpinLoop()  
+    elseif command == ".spinspeed" and arg2 then  
+        local newSpeed = tonumber(arg2)  
+        if newSpeed and newSpeed > 0 then  
+            SPIN_SPEED = newSpeed  
+            sendMessage("Spin speed set to " .. SPIN_SPEED)  
+        end  
     elseif command == ".ping" then  
         local ping = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())  
         sendMessage("ping: " .. ping .. "ms")  
@@ -527,7 +563,11 @@ local function onMessageReceived(messageData)
 end  
 
 local function onCharacterAdded(char)  
-    char:WaitForChild("Humanoid", 10)  
+    local humanoid = char:WaitForChild("Humanoid", 10)  
+    if humanoid then  
+        humanoid.Died:Connect(function() onCharacterDied(humanoid) end)  
+    end  
+    
     for _, item in ipairs(char:GetChildren()) do createReachPart(item) end  
     char.ChildAdded:Connect(createReachPart)  
     
@@ -569,5 +609,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v43 Spin)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v45)")  
 print("Floxy System Loaded. User Authorized.")
