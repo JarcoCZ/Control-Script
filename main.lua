@@ -11,7 +11,7 @@
     - Curated `.cmds` command list.  
     - Added a full `.cmds` command list.  
     - Added `.reset`, `.shop`, `.refresh`, `.to`, `.follow` commands.  
-    - Fixed critical execution and parsing errors.  
+    - Fixed critical execution and parsing errors!  
 ]]  
 
 -- Services  
