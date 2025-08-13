@@ -388,6 +388,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v23)") 
-sendMessage("Test version!")
+sendMessage("Script Executed Testing - Floxy (Fixed by luxx v23)") 
 print("Floxy System Loaded. User Authorized.")
