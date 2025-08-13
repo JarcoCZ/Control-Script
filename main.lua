@@ -291,7 +291,7 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    if command == "test" then  
+    if command == "@" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
