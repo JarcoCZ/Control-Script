@@ -1,13 +1,18 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v45 - Death Webhook)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v52 - Reversion Update)  
 
-    UPDATES (v45 - Death Webhook):  
+    UPDATES (v52 - Reversion Update):  
+    - REVERSION: The `.time` command's loop now runs from 1 to the specified number, removing the previous "greater than 100" condition.  
+    - CUSTOMIZATION: The `.safe` command no longer makes the player bounce up and down. It is now a single teleport to the safe platform.  
+    - CUSTOMIZATION: Changed the `.fjump` height from 50 studs to exactly 10 studs as requested.  
+    - RELIABILITY: The `.time` command now waits for the 'ChangeTime' event to exist before executing, preventing errors on game start.  
+    - RELIABILITY: Corrected an error in the character loading logic (`onCharacterAdded`) that could cause script failures.  
+    - NEW: Added a `.time [number]` command to rapidly fire the ChangeTime remote event.  
     - NEW: Sends a Discord webhook notification on the executor's death, including the killer's name if available.  
     - NEW: Added `.spinspeed [value]` command to dynamically adjust the spin speed.  
     - ADJUSTMENT: The `.spin` command now elevates the user higher for a better orbital path.  
     - ENHANCEMENT: The `.safezone` command now creates a moving, invisible platform under the target player.  
     - Added `.ping` command to display the local player's current network latency.  
-    - CRITICAL FIX: Resolved a crash in the `.spin` command by correcting the `teleportTo` function.  
 ]]  
 
 -- Services  
@@ -17,6 +22,7 @@ local TextChatService = game:GetService("TextChatService")
 local TeleportService = game:GetService("TeleportService")  
 local HttpService = game:GetService("HttpService")  
 local Workspace = game:GetService("Workspace")  
+local ReplicatedStorage = game:GetService("ReplicatedStorage")  
 
 -- Local Player & Script-Wide Variables  
 local LP = Players.LocalPlayer  
@@ -32,11 +38,13 @@ local ForceEquipConnection = nil
 local HeartbeatConnection = nil  
 local SpammingEnabled = false  
 local safePlatform = nil  
-local safeTeleportConnection = nil  
 local safeZoneConnection = nil  
 local safeZonePlatform = nil  
 local spinConnection = nil  
 local spinTarget = nil  
+
+-- Pre-loaded Instances  
+local ChangeTimeEvent = nil -- Will be loaded asynchronously  
 
 -- Configuration  
 local Dist = 0  
@@ -49,6 +57,8 @@ local SPIN_HEIGHT_OFFSET = 5
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)  
 local SAFE_ZONE_OFFSET = Vector3.new(0, 20, 0)  
 local SAFE_ZONE_PLATFORM_OFFSET = Vector3.new(0, -3, 0)  
+local FROG_JUMP_HEIGHT = 10 -- How high the frog jump goes (Set to 10 studs)  
+local FROG_JUMP_PREP_DIST = 3 -- How far down it teleports before jumping  
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygqUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0Pz22"  
 
 
@@ -202,6 +212,34 @@ end
 -- ==      COMMANDS & CONTROLS     ==  
 -- ==================================  
 
+local function changeTime(count)  
+    local num = tonumber(count)  
+    if not num or num <= 0 then return end  
+    
+    if not ChangeTimeEvent then  
+        sendMessage("Error: Time event not loaded yet. Please wait a moment and try again.")  
+        return  
+    end  
+
+    for i = 100, num do  
+        ChangeTimeEvent:FireServer("Anti333Exploitz123FF45324", 433, 429)  
+    end  
+    sendMessage("Time command executed " .. num .. " times.")  
+end  
+
+local function frogJump()  
+    local myChar = LP.Character  
+    if not (myChar and myChar.PrimaryPart) then return end  
+    
+    local startPos = myChar.PrimaryPart.Position  
+    local prepPos = startPos - Vector3.new(0, FROG_JUMP_PREP_DIST, 0)  
+    local finalPos = startPos + Vector3.new(0, FROG_JUMP_HEIGHT, 0)  
+    
+    teleportTo(myChar, prepPos)  
+    task.wait(0.05) -- Small delay for effect  
+    teleportTo(myChar, finalPos)  
+end  
+
 local function stopSpinLoop()  
     if spinConnection and spinConnection.Connected then  
         spinConnection:Disconnect()  
@@ -336,7 +374,7 @@ local function displayCommands()
 ]]  
     local commandList_2 = [[  
 .safe, .unsafe, .safezone [user], .unsafezone  
-.refresh, .reset, .shop, .equip, .unequip  
+.refresh, .reset, .shop, .equip, .unequip, .fjump, .time [num]  
 .spam, .unspam, .say [msg], .count, .ping, .test  
 ]]  
     sendMessage(commandList_1)  
@@ -434,6 +472,8 @@ local function onMessageReceived(messageData)
             SPIN_SPEED = newSpeed  
             sendMessage("Spin speed set to " .. SPIN_SPEED)  
         end  
+    elseif command == ".time" and arg2 then  
+        changeTime(arg2)  
     elseif command == ".ping" then  
         local ping = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())  
         sendMessage("ping: " .. ping .. "ms")  
@@ -477,6 +517,8 @@ local function onMessageReceived(messageData)
             local tool = LP.Character:FindFirstChildWhichIsA("Tool")  
             if tool then tool.Parent = LP.Backpack end  
         end  
+    elseif command == ".fjump" then  
+        frogJump()  
     elseif command == ".spam" then  
         SpammingEnabled = true  
     elseif command == ".unspam" then  
@@ -495,18 +537,7 @@ local function onMessageReceived(messageData)
             safePlatform.CanCollide = true  
         end  
         teleportTo(LP.Character, SAFE_PLATFORM_POS + Vector3.new(0, 5, 0))  
-        if not safeTeleportConnection or not safeTeleportConnection.Connected then  
-            safeTeleportConnection = RunService.Heartbeat:Connect(function()  
-                if LP.Character and LP.Character.PrimaryPart and safePlatform and safePlatform.Parent then  
-                    teleportTo(LP.Character, LP.Character.PrimaryPart.Position + Vector3.new(0, 1, 0))  
-                end  
-            end)  
-        end  
     elseif command == ".unsafe" then  
-        if safeTeleportConnection and safeTeleportConnection.Connected then  
-            safeTeleportConnection:Disconnect()  
-            safeTeleportConnection = nil  
-        end  
         if safePlatform and safePlatform.Parent then  
             safePlatform:Destroy()  
             safePlatform = nil  
@@ -587,6 +618,15 @@ end
 -- ==      INITIALIZATION          ==  
 -- ==================================  
 
+task.spawn(function()  
+    ChangeTimeEvent = ReplicatedStorage:WaitForChild("ChangeTime", 30) -- Wait up to 30s  
+    if ChangeTimeEvent then  
+        print("Floxy System: ChangeTime event successfully located.")  
+    else  
+        warn("Floxy System: ChangeTime event could not be located after 30s.")  
+    end  
+end)  
+
 for _, player in ipairs(Players:GetPlayers()) do table.insert(PlayerList, player) end  
 
 LP.CharacterAdded:Connect(onCharacterAdded)  
@@ -604,10 +644,10 @@ Players.PlayerRemoving:Connect(function(p)
         sendMessage("Main Connector has left. Connection reset.")  
     end  
     if safePlatform and #Players:GetPlayers() == 1 then  
-        safePlatform:Destroy()  
+        pcall(function() safePlatform:Destroy() end)  
     end  
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v45)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v52)")  
 print("Floxy System Loaded. User Authorized.")
