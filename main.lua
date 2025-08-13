@@ -1,10 +1,10 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v43 - Spin Fix)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v43 - Ping & Spin Fix)  
 
-    UPDATES (v43 - Spin Fix):  
+    UPDATES (v43 - Ping & Spin Fix):  
+    - Added `.ping` command to display the local player's current network latency in milliseconds.  
     - CRITICAL FIX: The `.spin` command was failing because the `teleportTo` function did not correctly handle CFrame values.  
     - The `teleportTo` function has been updated to accept both Vector3 and CFrame arguments, resolving the spin issue.  
-    - All other commands and logic from v43 remain unchanged.  
 ]]  
 
 -- Services  
@@ -317,7 +317,7 @@ local function displayCommands()
     local commandList_2 = [[  
 .safe, .unsafe, .safezone [user], .unsafezone  
 .refresh, .reset, .shop, .equip, .unequip  
-.spam, .unspam, .say [msg], .count, .test  
+.spam, .unspam, .say [msg], .count, .ping, .test  
 ]]  
     sendMessage(commandList_1)  
     task.wait(0.5)  
@@ -340,7 +340,7 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    if command == "@" then  
+    if command == "connect" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
@@ -394,6 +394,9 @@ local function onMessageReceived(messageData)
         if p then spinTarget = p; spinLoop() end  
     elseif command == ".unspin" then  
         stopSpinLoop()  
+    elseif command == ".ping" then  
+        local ping = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())  
+        sendMessage("ping: " .. ping .. "ms")  
     elseif command == ".reset" then  
         if #Players:GetPlayers() >= Players.MaxPlayers then  
             sendMessage("Won't rejoin, server is full.")  
@@ -549,5 +552,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v43 - Spin)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v43)")  
 print("Floxy System Loaded. User Authorized.")
