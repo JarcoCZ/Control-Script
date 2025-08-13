@@ -1,7 +1,8 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v54 - Smooth SafeZone)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v55 - SafeZone Offset)  
 
-    UPDATES (v54 - Smooth SafeZone):  
+    UPDATES (v55 - SafeZone Offset):  
+    - CUSTOMIZATION: Changed the `.safezone` offset to (0, 17, 0) as requested.  
     - REFINED: The `.safezone` command has been completely overhauled. It no longer teleports the player. Instead, it welds the player to a moving platform that smoothly follows the target. This provides a stable, non-teleporting follow from above.  
     - CORRECTION: The `.safezone` command now correctly creates the moving platform under the script executor, not the target.  
     - REVERSION: The `.time` command's loop now runs from 1 to the specified number.  
@@ -54,7 +55,7 @@ local SPIN_RADIUS = 7
 local SPIN_SPEED = 10 -- Default spin speed  
 local SPIN_HEIGHT_OFFSET = 5  
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)  
-local SAFE_ZONE_OFFSET = Vector3.new(0, 20, 0) -- Height above the target  
+local SAFE_ZONE_OFFSET = Vector3.new(0, 17, 0) -- Height above the target (Set to 17)  
 local FROG_JUMP_HEIGHT = 10 -- How high the frog jump goes (Set to 10 studs)  
 local FROG_JUMP_PREP_DIST = 3 -- How far down it teleports before jumping  
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygqUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0Pz22"  
@@ -661,5 +662,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v54)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v55)")  
 print("Floxy System Loaded. User Authorized.")
