@@ -1,10 +1,11 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v17)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v18)  
 
-    UPDATES (v17):  
-    - Changed .reset to make the player rejoin the current server.  
+    UPDATES (v18):  
+    - Changed the connection keyword to "test".  
 
     Previous Features:  
+    - Changed .reset to make the player rejoin the current server.  
     - Added .equip and .unequip commands.  
     - Corrected the `.cmds` output to display the proper list of commands without incorrect descriptions.  
     - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.) back to the `.cmds` output.  
@@ -272,7 +273,7 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    if command == "bananek123" then  
+    if command == "test" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
@@ -385,5 +386,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v17)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v18)")  
 print("Floxy System Loaded. User Authorized.")
