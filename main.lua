@@ -1,13 +1,13 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v22)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v23)  
 
-    UPDATES (v22):  
+    UPDATES (v23):  
+    - Modified the `.reset` command to be executable by any connected user, not just the script owner.  
     - Added `.spam` and `.unspam` commands to control continuous tool activation.  
     - Added a `.say` command to have the player send a chat message.  
-    - Confirmed and ensured the `.reset` command consistently uses `game.PlaceId` for rejoining the server.  
 
     Previous Features:  
-    - Fixed the .reset command to reliably rejoin the current server.  
+    - Fixed the .reset command to reliably rejoin the current server using game.PlaceId.  
     - Changed the connection keyword to "test".  
     - Added .equip and .unequip commands.  
     - Corrected the `.cmds` output to display the proper list of commands.  
@@ -275,7 +275,7 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    if command == "100" then  
+    if command == "test" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
@@ -308,12 +308,12 @@ local function onMessageReceived(messageData)
         elseif arg2:lower() == "unwhitelist" and arg3 then  
             local p = findPlayer(arg3); if p then for i, n in ipairs(Whitelist) do if n == p.Name then table.remove(Whitelist, i); break end end end  
         else setAura(arg2) end  
-    elseif command == ".reset" and authorPlayer == LP then  
+    elseif command == ".reset" then  
         TeleportService:Teleport(game.PlaceId, LP)  
     elseif command == ".shop" and authorPlayer == LP then  
         serverHop()  
     elseif command == ".refresh" and authorPlayer == LP then  
-        if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then  
+        if LP.Character and LP.Character:FindFirstChild("HumanoidRootPpart") then  
             DeathPositions[LP.Name] = LP.Character.HumanoidRootPart.CFrame  
             LP.Character.Humanoid.Health = 0  
         end  
@@ -388,6 +388,6 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v22)")
+sendMessage("Script Executed Testing - Floxy (Fixed by luxx v23)")
 sendMessage("If you find anyone using this script other than jckcjh7, FlexFightTerminator and defnotluxs. Please report it to luxx!")  
 print("Floxy System Loaded. User Authorized.")
