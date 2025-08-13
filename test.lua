@@ -1,10 +1,12 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v37)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v39)  
 
-    UPDATES (v37):  
+    UPDATES (v39):  
+    - Added `.loop all` to target all players in the server (except whitelisted ones).  
+    - Added `.unloop all` to clear all targets.  
+    - Fixed the `.spin` command by using the correct character teleport method (`SetPrimaryPartCFrame`).  
+    - Added a safety check to the PlayerRemoving event to prevent errors if the leaving player was the spin target.  
     - Added `.test` command to load and execute a script from a URL.  
-    - Added `.spin [user]` command to make a player spin around you.  
-    - Added `.unspin` command to stop the spinning effect.  
 ]]  
 
 -- Services  
@@ -79,17 +81,10 @@ local function findPlayer(partialName)
 end  
 
 local function teleportTo(character, position)  
-    if character and character:FindFirstChild("HumanoidRootPart") then  
-        character.HumanoidRootPart.CFrame = CFrame.new(position)  
+    if character and character.PrimaryPart then  
+        character:SetPrimaryPartCFrame(CFrame.new(position))  
     end  
 end  
-
-local function teleportToCFrame(character, cframe)  
-    if character and character:FindFirstChild("HumanoidRootPart") then  
-        character.HumanoidRootPart.CFrame = cframe  
-    end  
-end  
-
 
 -- ==================================  
 -- ==      TOOL & COMBAT LOGIC     ==  
@@ -147,12 +142,12 @@ local function attackPlayer(toolPart, player)
 end  
 
 local function onHeartbeat()  
-    if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then return end  
-    local myPos = LP.Character.HumanoidRootPart.Position  
+    if not LP.Character or not LP.Character.PrimaryPart then return end  
+    local myPos = LP.Character.PrimaryPart.Position  
     local myHumanoid = LP.Character:FindFirstChildOfClass("Humanoid")  
 
-    if FollowTarget and FollowTarget.Character and FollowTarget.Character:FindFirstChild("HumanoidRootPart") and myHumanoid then  
-        local targetPos = FollowTarget.Character.HumanoidRootPart.Position  
+    if FollowTarget and FollowTarget.Character and FollowTarget.Character.PrimaryPart and myHumanoid then  
+        local targetPos = FollowTarget.Character.PrimaryPart.Position  
         if (targetPos - myPos).Magnitude > 5 then  
             myHumanoid:MoveTo(targetPos)  
         end  
@@ -168,10 +163,10 @@ local function onHeartbeat()
             local hitbox = tool:FindFirstChild("BoxReachPart") or tool:FindFirstChild("Handle")  
             if hitbox then  
                 for _, player in ipairs(PlayerList) do  
-                    if player ~= LP and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChildOfClass("Humanoid").Health > 0 then  
+                    if player ~= LP and player.Character and player.Character.PrimaryPart and player.Character:FindFirstChildOfClass("Humanoid").Health > 0 then  
                         if not table.find(Whitelist, player.Name) then  
                             local isTargeted = table.find(Targets, player.Name)  
-                            local inAuraRange = AuraEnabled and (player.Character.HumanoidRootPart.Position - myPos).Magnitude <= Dist  
+                            local inAuraRange = AuraEnabled and (player.Character.PrimaryPart.Position - myPos).Magnitude <= Dist  
                             if isTargeted or inAuraRange then  
                                 attackPlayer(hitbox, player)  
                             end  
@@ -224,7 +219,7 @@ end
 
 local function addTarget(playerName)  
     local player = findPlayer(playerName)  
-    if player and not table.find(Targets, player.Name) then  
+    if player and player ~= LP and not table.find(Targets, player.Name) then  
         table.insert(Targets, player.Name); forceEquip(true)  
     end  
 end  
@@ -256,21 +251,22 @@ end
 local function spinLoop()  
     stopSpinLoop()  
     spinConnection = RunService.Heartbeat:Connect(function()  
-        if not spinTarget or not spinTarget.Parent or not spinTarget.Character or not spinTarget.Character:FindFirstChild("HumanoidRootPart") then  
+        if not spinTarget or not spinTarget.Parent or not spinTarget.Character or not spinTarget.Character.PrimaryPart then  
             stopSpinLoop()  
             return  
         end  
-        if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then  
+        if not LP.Character or not LP.Character.PrimaryPart then  
             stopSpinLoop()  
             return  
         end  
-        local myPos = LP.Character.HumanoidRootPart.Position  
+        local myPos = LP.Character.PrimaryPart.Position  
         local angle = tick() * SPIN_SPEED  
         local x = myPos.X + SPIN_RADIUS * math.cos(angle)  
         local z = myPos.Z + SPIN_RADIUS * math.sin(angle)  
-        local targetPos = Vector3.new(x, myPos.Y, z)  
+        local targetPos = Vector3.new(x, spinTarget.Character.PrimaryPart.Position.Y, z)  
         local newCFrame = CFrame.new(targetPos, myPos)  
-        teleportToCFrame(spinTarget.Character, newCFrame)  
+        
+        spinTarget.Character:SetPrimaryPartCFrame(newCFrame)  
     end)  
 end  
 
@@ -308,7 +304,7 @@ end
 
 local function displayCommands()  
     local commandList_1 = [[  
-.kill [user], .loop [user], .unloop [user]  
+.kill [user], .loop [user|all], .unloop [user|all]  
 .aura [range], .aura whitelist [user], .aura unwhitelist [user]  
 .to [user], .follow [user], .unfollow, .spin [user], .unspin  
 ]]  
@@ -365,8 +361,23 @@ local function onMessageReceived(messageData)
             sendMessage("Unconnected: " .. targetPlayer.Name)  
         end  
     elseif command == ".kill" and arg2 then killOnce(arg2)  
-    elseif command == ".loop" and arg2 then addTarget(arg2)  
-    elseif command == ".unloop" and arg2 then removeTarget(arg2)  
+    elseif command == ".loop" and arg2 then  
+        if arg2:lower() == "all" then  
+            for _, player in ipairs(PlayerList) do  
+                if player ~= LP and not table.find(Whitelist, player.Name) then  
+                    addTarget(player.Name)  
+                end  
+            end  
+        else  
+            addTarget(arg2)  
+        end  
+    elseif command == ".unloop" and arg2 then  
+        if arg2:lower() == "all" then  
+            table.clear(Targets)  
+            forceEquip(AuraEnabled) -- only keep equipping if aura is on  
+        else  
+            removeTarget(arg2)  
+        end  
     elseif command == ".aura" and arg2 then  
         if arg2:lower() == "whitelist" and arg3 then  
             local p = findPlayer(arg3); if p and not table.find(Whitelist, p.Name) then table.insert(Whitelist, p.Name) end  
@@ -383,14 +394,14 @@ local function onMessageReceived(messageData)
     elseif command == ".shop" and authorPlayer == LP then  
         serverHop()  
     elseif command == ".refresh" then  
-        if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then  
-            DeathPositions[LP.Name] = LP.Character.HumanoidRootPart.CFrame  
-            LP.Character.Humanoid.Health = 0  
+        if LP.Character and LP.Character.PrimaryPart then  
+            DeathPositions[LP.Name] = LP.Character.PrimaryPart.CFrame  
+            if LP.Character.Humanoid then LP.Character.Humanoid.Health = 0 end  
         end  
     elseif command == ".to" and arg2 then  
         local targetPlayer = findPlayer(arg2)  
-        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") and LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then  
-            teleportTo(LP.Character, targetPlayer.Character.HumanoidRootPart.Position)  
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character.PrimaryPart and LP.Character then  
+            teleportTo(LP.Character, targetPlayer.Character.PrimaryPart.Position)  
         end  
     elseif command == ".follow" and arg2 then  
         local targetPlayer = findPlayer(arg2)  
@@ -430,8 +441,8 @@ local function onMessageReceived(messageData)
         teleportTo(LP.Character, SAFE_PLATFORM_POS + Vector3.new(0, 5, 0))  
         if not safeTeleportConnection or not safeTeleportConnection.Connected then  
             safeTeleportConnection = RunService.Heartbeat:Connect(function()  
-                if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") and safePlatform and safePlatform.Parent then  
-                    teleportTo(LP.Character, LP.Character.HumanoidRootPart.Position + Vector3.new(0, 1, 0))  
+                if LP.Character and LP.Character.PrimaryPart and safePlatform and safePlatform.Parent then  
+                    teleportTo(LP.Character, LP.Character.PrimaryPart.Position + Vector3.new(0, 1, 0))  
                 end  
             end)  
         end  
@@ -444,8 +455,8 @@ local function onMessageReceived(messageData)
             safePlatform:Destroy()  
             safePlatform = nil  
         end  
-        if MainConnector and MainConnector.Character and MainConnector.Character:FindFirstChild("HumanoidRootPart") and LP.Character then  
-            teleportTo(LP.Character, MainConnector.Character.HumanoidRootPart.Position + Vector3.new(0, 5, 0))  
+        if MainConnector and MainConnector.Character and MainConnector.Character.PrimaryPart and LP.Character then  
+            teleportTo(LP.Character, MainConnector.Character.PrimaryPart.Position + Vector3.new(0, 5, 0))  
         else  
             local spawns = Workspace:FindFirstChild("Spawns") or Workspace:FindFirstChild("SpawnLocation")  
             if spawns and LP.Character then  
@@ -453,7 +464,7 @@ local function onMessageReceived(messageData)
                 if spawnPoint then  
                     teleportTo(LP.Character, spawnPoint.Position + Vector3.new(0, 5, 0))  
                 else   
-                     LP.Character.Humanoid.Health = 0  
+                     if LP.Character.Humanoid then LP.Character.Humanoid.Health = 0 end  
                 end  
             else  
                 if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then LP.Character.Humanoid.Health = 0 end  
@@ -464,13 +475,13 @@ local function onMessageReceived(messageData)
         if not targetPlayer then return end  
         stopSafeZoneLoop()  
         safeZoneConnection = RunService.Heartbeat:Connect(function()  
-            if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then stopSafeZoneLoop(); return end  
-            if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then  
+            if not LP.Character or not LP.Character.PrimaryPart then stopSafeZoneLoop(); return end  
+            if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character or not targetPlayer.Character.PrimaryPart then  
                 sendMessage("Safezone target lost. Disabling.")  
                 stopSafeZoneLoop()  
                 return  
             end  
-            local targetPos = targetPlayer.Character.HumanoidRootPart.Position  
+            local targetPos = targetPlayer.Character.PrimaryPart.Position  
             teleportTo(LP.Character, targetPos + SAFE_ZONE_OFFSET)  
         end)  
     elseif command == ".unsafezone" then  
@@ -510,11 +521,11 @@ if LP.Character then onCharacterAdded(LP.Character) end
 
 Players.PlayerAdded:Connect(function(p) table.insert(PlayerList, p) end)  
 Players.PlayerRemoving:Connect(function(p)  
-    if spinTarget == p then stopSpinLoop() end  
+    if spinTarget and spinTarget == p then stopSpinLoop() end  
     removeTarget(p.Name)  
     for i, pl in ipairs(PlayerList) do if pl == p then table.remove(PlayerList, i); break end end  
     for i, u in ipairs(ConnectedUsers) do if u == p then table.remove(ConnectedUsers, i); break end end  
-    if p == FollowTarget then FollowTarget = nil; stopSafeZoneLoop() end  
+    if FollowTarget and p == FollowTarget then FollowTarget = nil; stopSafeZoneLoop() end  
     if MainConnector == p then  
         MainConnector = nil; table.clear(ConnectedUsers); table.clear(Whitelist)  
         sendMessage("Main Connector has left. Connection reset.")  
@@ -525,5 +536,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v37)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v39)")  
 print("Floxy System Loaded. User Authorized.")
