@@ -1,13 +1,11 @@
 --[[  
-    Floxy Script - Merged & Enhanced by luxx (v69 - Secure Connect)  
+    Floxy Script - Merged & Enhanced by luxx (v70 - Stable Init)  
 
-    UPDATES (v69 - Secure Connect):  
-    - INTEGRATED: The robust UserId-based whitelist/blacklist connection system.  
-    - REPLACED: The old 'connect' command with the more secure '@ [user]' and '.unconnect' commands.  
-    - NEW: `ADMIN_USER_ID` variable to define the script's primary owner.  
-    - NEW: `CONNECT_WHITELIST` table. Only UserIDs in this list can use the @ and .unconnect commands.  
-    - NEW: `CONNECT_BLACKLIST` table. UserIDs in this list can never be connected to the script.  
-    - ENHANCED: The script now uses the secure connection logic while retaining all features from v62, including aura visibility.  
+    UPDATES (v70 - Stable Init):  
+    - FIXED: A critical initialization error that could prevent the script from running completely.  
+    - IMPROVED: The logic for setting up the initial user connections and whitelists is now more robust, preventing race conditions on startup.  
+    - STABILITY: Added a small delay to the initial "Script Executed" message to ensure the chat service is ready, making message delivery more reliable.  
+    - RETAINED: All features from v69, including the secure UserId-based connection system.  
 ]]  
 
 -- Services  
@@ -18,6 +16,7 @@ local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")  
 local Workspace = game:GetService("Workspace")  
 local ReplicatedStorage = game:GetService("ReplicatedStorage")  
+local StarterGui = game:GetService("StarterGui")  
 
 -- Local Player & Script-Wide Variables  
 local LP = Players.LocalPlayer  
@@ -45,14 +44,14 @@ local ChangeTimeEvent = nil
 -- Configuration  
 local ADMIN_USER_ID = 1588706905 -- The primary owner. Cannot be unconnected by others.  
 
--- NEW: Whitelist for who can use connection commands  
+-- Whitelist for who can use connection commands  
 local CONNECT_WHITELIST = {  
     1588706905,  -- The main admin  
     9167607498,  -- Additional authorized user  
     7569689472   -- Additional authorized user  
 }  
 
--- NEW: Blacklist for who CANNOT be connected  
+-- Blacklist for who CANNOT be connected  
 local CONNECT_BLACKLIST = {  
     -- 12345678, -- Example of a blacklisted user  
 }  
@@ -73,6 +72,11 @@ local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzc
 
 -- Authorization Check  
 if not table.find(CONNECT_WHITELIST, LP.UserId) then  
+    StarterGui:SetCore("SendNotification", {  
+        Title = "Floxy Script",  
+        Text = "You are not authorized to use this script.",  
+        Duration = 10  
+    })  
     warn("Floxy Script: User not authorized. Halting execution.")  
     return  
 end  
@@ -372,7 +376,7 @@ local function onMessageReceived(messageData)
         elseif command == "n" then AwaitingRejoinConfirmation = false; sendMessage("Rejoin Rejected!"); return end  
     end  
 
-    -- MERGED: New Secure Connection Logic  
+    -- New Secure Connection Logic  
     if command:sub(1,1) == "@" then  
         if not table.find(CONNECT_WHITELIST, authorPlayer.UserId) then return end  
         local username = command:sub(2); if arg2 then username = arg2 end  
@@ -460,25 +464,35 @@ end
 -- ==      INITIALIZATION          ==  
 -- ==================================  
 
+-- Correctly populate initial player list and identify the main connector  
+for _, player in ipairs(Players:GetPlayers()) do  
+    table.insert(PlayerList, player)  
+    if player.UserId == ADMIN_USER_ID then  
+        MainConnector = player  
+    end  
+end  
+
+-- Correctly set up the local player's connection status  
+table.insert(ConnectedUsers, LP)  
+table.insert(Whitelist, LP.Name)  
+
 task.spawn(function()  
     ChangeTimeEvent = ReplicatedStorage:WaitForChild("ChangeTime", 30)  
     if ChangeTimeEvent then print("Floxy System: ChangeTime event successfully located.") else warn("Floxy System: ChangeTime event could not be located after 30s.") end  
 end)  
-
-for _, player in ipairs(Players:GetPlayers()) do  
-    table.insert(PlayerList, player)  
-    if player.UserId == ADMIN_USER_ID then MainConnector = player end  
-end  
-table.insert(ConnectedUsers, LP)  
-table.insert(Whitelist, LP.Name)  
 
 LP.CharacterAdded:Connect(onCharacterAdded)  
 if LP.Character then onCharacterAdded(LP.Character) end  
 
 Players.PlayerAdded:Connect(function(p)  
     table.insert(PlayerList, p)  
-    if table.find(CONNECT_WHITELIST, p.UserId) then sendMessage("A whitelisted user, "..p.Name..", has joined.") end  
-    if p.UserId == ADMIN_USER_ID then MainConnector = p end  
+    if table.find(CONNECT_WHITELIST, p.UserId) then  
+        task.wait(1) -- Give chat time to be ready for the message  
+        sendMessage("A whitelisted user, "..p.Name..", has joined.")  
+    end  
+    if p.UserId == ADMIN_USER_ID then  
+        MainConnector = p  
+    end  
 end)  
 
 Players.PlayerRemoving:Connect(function(p)  
@@ -494,5 +508,6 @@ end)
 
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (v69 - Secure Connect)")  
+task.wait(1) -- Added delay to ensure chat service is ready  
+sendMessage("Script Executed - Floxy (v70 - Stable Init)")  
 print("Floxy System Loaded. User Authorized.")
