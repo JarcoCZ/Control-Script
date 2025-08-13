@@ -1,17 +1,9 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v55 - SafeZone Offset)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v56 - SafeZone Fix)  
 
-    UPDATES (v55 - SafeZone Offset):  
-    - CUSTOMIZATION: Changed the `.safezone` offset to (0, 17, 0) as requested.  
-    - REFINED: The `.safezone` command has been completely overhauled. It no longer teleports the player. Instead, it welds the player to a moving platform that smoothly follows the target. This provides a stable, non-teleporting follow from above.  
-    - CORRECTION: The `.safezone` command now correctly creates the moving platform under the script executor, not the target.  
-    - REVERSION: The `.time` command's loop now runs from 1 to the specified number.  
-    - CUSTOMIZATION: Changed the `.fjump` height from 50 studs to exactly 10 studs as requested.  
-    - RELIABILITY: The `.time` command now waits for the 'ChangeTime' event to exist before executing.  
-    - RELIABILITY: Corrected an error in the character loading logic (`onCharacterAdded`).  
-    - NEW: Added a `.time [number]` command to rapidly fire the ChangeTime remote event.  
-    - NEW: Sends a Discord webhook notification on the executor's death.  
-    - NEW: Added `.spinspeed [value]` command to dynamically adjust the spin speed.  
+    UPDATES (v56 - SafeZone Fix):  
+    - CORRECTION: Fixed a critical logic error in the `.safezone` command that prevented the follow platform from working correctly. The welding and positioning logic has been completely rewritten for stability.  
+    - CUSTOMIZATION: The `.safezone` offset remains at (0, 17, 0) as previously requested.  
 ]]  
 
 -- Services  
@@ -39,12 +31,12 @@ local SpammingEnabled = false
 local safePlatform = nil  
 local safeZoneConnection = nil  
 local safeZonePlatform = nil  
-local safeZoneWeld = nil -- Weld for smooth following  
+local safeZoneWeld = nil  
 local spinConnection = nil  
 local spinTarget = nil  
 
 -- Pre-loaded Instances  
-local ChangeTimeEvent = nil -- Will be loaded asynchronously  
+local ChangeTimeEvent = nil  
 
 -- Configuration  
 local Dist = 0  
@@ -52,14 +44,13 @@ local AuraEnabled = false
 local DMG_TIMES = 2  
 local FT_TIMES = 5  
 local SPIN_RADIUS = 7  
-local SPIN_SPEED = 10 -- Default spin speed  
+local SPIN_SPEED = 10  
 local SPIN_HEIGHT_OFFSET = 5  
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)  
-local SAFE_ZONE_OFFSET = Vector3.new(0, 17, 0) -- Height above the target (Set to 17)  
-local FROG_JUMP_HEIGHT = 10 -- How high the frog jump goes (Set to 10 studs)  
-local FROG_JUMP_PREP_DIST = 3 -- How far down it teleports before jumping  
+local SAFE_ZONE_OFFSET = Vector3.new(0, 17, 0) -- Height above the target  
+local FROG_JUMP_HEIGHT = 10  
+local FROG_JUMP_PREP_DIST = 3  
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygqUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0Pz22"  
-
 
 -- Authorization  
 local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
@@ -79,14 +70,10 @@ if not isAuthorized(LP.UserId) then
 end  
 
 local function sendWebhook(payload)  
-    local success, response = pcall(function()  
+    pcall(function()  
         HttpService:PostAsync(WEBHOOK_URL, HttpService:JSONEncode(payload))  
     end)  
-    if not success then  
-        warn("Failed to send webhook:", response)  
-    end  
 end  
-
 
 local function sendMessage(message)  
     pcall(function()  
@@ -235,7 +222,7 @@ local function frogJump()
     local finalPos = startPos + Vector3.new(0, FROG_JUMP_HEIGHT, 0)  
     
     teleportTo(myChar, prepPos)  
-    task.wait(0.05) -- Small delay for effect  
+    task.wait(0.05)  
     teleportTo(myChar, finalPos)  
 end  
 
@@ -263,7 +250,7 @@ local function stopSafeZoneLoop()
     if LP.Character and LP.Character.PrimaryPart then  
         LP.Character.PrimaryPart.Anchored = false  
     end  
-	FollowTarget = nil  
+    FollowTarget = nil  
 end  
 
 local function forceEquip(shouldEquip)  
@@ -571,30 +558,31 @@ local function onMessageReceived(messageData)
         stopSafeZoneLoop()  
         FollowTarget = targetPlayer  
         
+        local hrp = LP.Character.PrimaryPart  
+        
         safeZonePlatform = Instance.new("Part", Workspace)  
         safeZonePlatform.Name = "SafeZonePlatform"  
         safeZonePlatform.Size = Vector3.new(10, 1, 10)  
         safeZonePlatform.Transparency = 0.5  
-        safeZonePlatform.Anchored = true  
+        safeZonePlatform.Anchored = false -- Must be unanchored to be welded  
         safeZonePlatform.CanCollide = false  
         
-        local hrp = LP.Character.PrimaryPart  
-        hrp.Anchored = true -- Anchor the player to prevent them from falling off  
-        
-        safeZoneWeld = Instance.new("WeldConstraint", safeZonePlatform)  
+        safeZoneWeld = Instance.new("Weld", safeZonePlatform)  
         safeZoneWeld.Part0 = safeZonePlatform  
         safeZoneWeld.Part1 = hrp  
-
+        safeZoneWeld.C0 = CFrame.new(0, 2, 0) -- Position the platform slightly above the player's head  
+        
         safeZoneConnection = RunService.Heartbeat:Connect(function()  
-            if not (FollowTarget and FollowTarget.Parent and FollowTarget.Character and FollowTarget.Character.PrimaryPart and safeZonePlatform and safeZonePlatform.Parent) then  
-                sendMessage("Safezone target lost. Disabling.")  
+            if not (FollowTarget and FollowTarget.Character and FollowTarget.Character.PrimaryPart and LP.Character and LP.Character.PrimaryPart) then  
+                sendMessage("Safezone target or self lost. Disabling.")  
                 stopSafeZoneLoop()  
                 return  
             end  
 
             local targetPos = FollowTarget.Character.PrimaryPart.Position  
-            local platformNewCFrame = CFrame.new(targetPos + SAFE_ZONE_OFFSET)  
-            safeZonePlatform.CFrame = platformNewCFrame  
+            local myHRP = LP.Character.PrimaryPart  
+            
+            myHRP.CFrame = CFrame.new(targetPos + SAFE_ZONE_OFFSET) * myHRP.CFrame.Rotation  
         end)  
     elseif command == ".unsafezone" then  
         stopSafeZoneLoop()  
@@ -606,7 +594,7 @@ local function onMessageReceived(messageData)
 end  
 
 local function onCharacterAdded(char)  
-    stopSafeZoneLoop() -- Make sure the player isn't stuck on respawn  
+    stopSafeZoneLoop()  
     local humanoid = char:WaitForChild("Humanoid", 10)  
     if humanoid then  
         humanoid.Died:Connect(function() onCharacterDied(humanoid) end)  
@@ -632,7 +620,7 @@ end
 -- ==================================  
 
 task.spawn(function()  
-    ChangeTimeEvent = ReplicatedStorage:WaitForChild("ChangeTime", 30) -- Wait up to 30s  
+    ChangeTimeEvent = ReplicatedStorage:WaitForChild("ChangeTime", 30)  
     if ChangeTimeEvent then  
         print("Floxy System: ChangeTime event successfully located.")  
     else  
@@ -662,5 +650,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v55)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v56)")  
 print("Floxy System Loaded. User Authorized.")
