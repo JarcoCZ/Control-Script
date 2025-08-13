@@ -1,14 +1,14 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v15)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v16)  
 
-    BUG FIXES (v15):  
-    - Corrected the `.cmds` output to display the proper list of commands without incorrect descriptions.  
+    NEW FEATURES (v16):  
+    - The `connect` command is now restricted to the whitelisted user ID (1588706905).  
+    - Unauthorized attempts to use `connect` will result in a "Connection rejected" message.  
 
     Previous Features:  
+    - Corrected the `.cmds` output.  
     - Added utility commands (`.refresh`, `.reset`, `.follow`, etc.) back to the `.cmds` output.  
     - `.cmds` command output now only shows command names, without descriptions.  
-    - Curated `.cmds` command list.  
-    - Added a full `.cmds` command list.  
     - Added `.reset`, `.shop`, `.refresh`, `.to`, `.follow` commands.  
     - Fixed critical execution and parsing errors.  
 ]]  
@@ -41,6 +41,7 @@ local FT_TIMES = 5
 
 -- Authorization  
 local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
+local ConnectWhitelist = 1588706905 -- The only UserID that can initiate connections  
 
 -- ==================================  
 -- ==      HELPER FUNCTIONS        ==  
@@ -235,7 +236,6 @@ local function serverHop()
 end  
 
 local function displayCommands()  
-    -- Corrected command list as per user feedback  
     local commandList = [[  
 Commands:  
 .loop  
@@ -269,6 +269,11 @@ local function onMessageReceived(messageData)
     local arg3 = args[3] or nil  
 
     if command == "connect" then  
+        if authorPlayer.UserId ~= ConnectWhitelist then  
+            sendMessage("Connection rejected, not whitelisted.")  
+            return  
+        end  
+
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
@@ -367,5 +372,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v15)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v16)")  
 print("Floxy System Loaded. User Authorized.")
