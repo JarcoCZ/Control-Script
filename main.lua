@@ -105,43 +105,65 @@ end
 -- ==================================  
 -- ==        COMBAT LOGIC          ==  
 -- ==================================  
-
--- This is the new combat system, integrated with the script's commands.  
--- It uses a Heartbeat loop and firetouchinterest for combat.  
+-- This is the new, corrected combat system.  
+-- It now auto-equips a weapon and dynamically adjusts the aura box size.  
 
 local Players = game:GetService("Players")  
 local RunService = game:GetService("RunService")  
 
--- 'Targets' table is now managed by addTarget/removeTarget functions below.  
--- 'AuraEnabled' is used to control the aura functionality.  
 local AuraEnabled = false   
 local CombatLoopConnection = nil  
-local AURA_RANGE = 70 -- You can adjust the aura distance here.  
+local AURA_RANGE = 70 -- Default aura distance. This value will now be updated by the .aura command.  
 
 -- Helper variables from the new script  
-local KillLoopTracker = {} -- Tracks the secondary kill loop for each player  
-local FT_TIMES = 5 -- How many times to fire touch interest  
-local DMG_TIMES = 2 -- How many times to run the damage loop  
+local KillLoopTracker = {}   
+local FT_TIMES = 5  
+local DMG_TIMES = 2  
 
--- This function creates a large, invisible part around the weapon handle  
--- to detect nearby players.  
+-- This function now dynamically sets the BoxReachPart size based on the AURA_RANGE.  
 local function createReachBox(tool)  
 	if tool:IsA("Tool") and tool:FindFirstChild("Handle") then  
 		local handle = tool.Handle  
-		if not handle:FindFirstChild("BoxReachPart") then  
-			local p = Instance.new("Part")  
-			p.Name = "BoxReachPart"  
-			p.Size = Vector3.new(AURA_RANGE, AURA_RANGE, AURA_RANGE) -- Box size matches aura range  
-			p.Transparency = 1  
-			p.CanCollide = false  
-			p.Massless = true  
-			p.Parent = handle  
-			local w = Instance.new("WeldConstraint")  
-			w.Part0 = handle  
-			w.Part1 = p  
-			w.Parent = p  
+        local box = handle:FindFirstChild("BoxReachPart")  
+		if not box then  
+			box = Instance.new("Part")  
+			box.Name = "BoxReachPart"  
+			box.Transparency = 1  
+			box.CanCollide = false  
+			box.Massless = true  
+			box.Anchored = true -- Anchor it to prevent physics issues  
+			box.Parent = handle  
 		end  
+        -- UPDATE: The size is now set from the AURA_RANGE variable  
+		box.Size = Vector3.new(AURA_RANGE, AURA_RANGE, AURA_RANGE)  
+        
+        -- Weld it to the handle  
+        local weld = box:FindFirstChildOfClass("WeldConstraint") or Instance.new("WeldConstraint")  
+        weld.Part0 = handle  
+        weld.Part1 = box  
+        weld.Parent = box  
 	end  
+end  
+
+-- NEW: Automatically equips the best tool from the backpack.  
+local function equipBestWeapon()  
+    local backpack = LP:FindFirstChildOfClass("Backpack")  
+    local character = LP.Character  
+    if not (backpack and character) then return end  
+
+    -- Check if a tool is already equipped  
+    if character:FindFirstChildWhichIsA("Tool") then  
+        return -- A tool is already held, no need to equip another.  
+    end  
+
+    local bestTool = nil  
+    -- Prioritize tools named "Sword", otherwise find any tool.  
+    bestTool = backpack:FindFirstChild("Sword") or backpack:FindFirstChildWhichIsA("Tool")  
+
+    if bestTool then  
+        sendMessage("Equipping " .. bestTool.Name .. ".")  
+        bestTool.Parent = character  
+    end  
 end  
 
 -- This function fires the touch event multiple times for consistency.  
@@ -175,7 +197,7 @@ local function startKillLoop(player, toolPart)
                     firetouchinterest(toolPart, part, 1)  
                 end  
             end  
-            task.wait() -- Yield to prevent freezing  
+            task.wait()   
         end  
         KillLoopTracker[player] = nil  
     end)()  
@@ -187,16 +209,10 @@ local function mainHit(toolPart, targetPlayer)
 	if not targetCharacter then return end  
 	  
 	local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")  
-	local hrp = targetCharacter:FindFirstChild("HumanoidRootPart")  
+	if not (humanoid and humanoid.Health > 0) then return end  
 	  
-	if not (humanoid and hrp and humanoid.Health > 0) then return end  
+	pcall(function() toolPart.Parent:Activate() end)  
 	  
-	-- Activate the tool (e.g., swing the sword)  
-	pcall(function()  
-		toolPart.Parent:Activate()  
-	end)  
-	  
-	-- Fire touch interest on all parts of the target  
 	for _ = 1, DMG_TIMES do  
 		for _, part in ipairs(targetCharacter:GetDescendants()) do  
 			if part:IsA("BasePart") then  
@@ -205,31 +221,29 @@ local function mainHit(toolPart, targetPlayer)
 		end  
 	end  
 	  
-	-- Start the secondary aggressive loop  
 	startKillLoop(targetPlayer, toolPart)  
 end  
 
 -- The main combat loop, connected to Heartbeat (runs every frame).  
 local function onHeartbeat()  
 	local character = LP.Character  
-	if not character then return end  
+	if not character or not character.PrimaryPart then return end  
 	  
-	local hrp = character:FindFirstChild("HumanoidRootPart")  
-	if not hrp then return end  
-	  
-	-- Find all valid targets based on manual list and aura  
+    -- FIX: Equip a weapon if we don't have one.  
+    equipBestWeapon()  
+
 	local validTargets = {}  
 	for _, player in ipairs(Targets) do  
-		if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then  
+		if player.Character and player.Character.PrimaryPart then  
 			table.insert(validTargets, player)  
 		end  
 	end  
 	  
 	if AuraEnabled then  
 		for _, player in ipairs(Players:GetPlayers()) do  
-			if player ~= LP and not table.find(Targets, player) then  
-				if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then  
-                    local dist = (hrp.Position - player.Character.PrimaryPart.Position).Magnitude  
+			if player ~= LP and not table.find(validTargets, player) then  
+				if player.Character and player.Character.PrimaryPart then  
+                    local dist = (character.PrimaryPart.Position - player.Character.PrimaryPart.Position).Magnitude  
                     if dist <= AURA_RANGE then  
 					    table.insert(validTargets, player)  
                     end  
@@ -240,15 +254,12 @@ local function onHeartbeat()
 
     if #validTargets == 0 then return end  
 
-	-- Find our weapon and its reach part  
-	for _, tool in ipairs(character:GetDescendants()) do  
-		if tool:IsA("Tool") then  
-			local reachPart = tool:FindFirstChild("BoxReachPart") or tool:FindFirstChild("Handle")  
-			if reachPart then  
-				-- Attack all valid targets  
-				for _, targetPlayer in ipairs(validTargets) do  
-					mainHit(reachPart, targetPlayer)  
-				end  
+	local tool = character:FindFirstChildWhichIsA("Tool")  
+	if tool then  
+		local reachPart = tool:FindFirstChild("BoxReachPart") or tool:FindFirstChild("Handle")  
+		if reachPart then  
+			for _, targetPlayer in ipairs(validTargets) do  
+				mainHit(reachPart, targetPlayer)  
 			end  
 		end  
 	end  
@@ -257,6 +268,7 @@ end
 -- Function to set up the reach boxes on any tools the player gets.  
 local function setupCharacter(character)  
     if not character then return end  
+    -- FIX: Re-create the reach box every time the character spawns to ensure it has the correct size.  
 	for _, tool in ipairs(character:GetDescendants()) do  
 		createReachBox(tool)  
 	end  
@@ -266,14 +278,11 @@ end
 -- Starts or stops the main Heartbeat loop.  
 local function setCombatLoop(shouldBeActive)  
     if shouldBeActive and not CombatLoopConnection then  
-        -- Start the loop  
         sendMessage("Combat loop started.")  
         CombatLoopConnection = RunService.Heartbeat:Connect(onHeartbeat)  
     elseif not shouldBeActive and CombatLoopConnection then  
-        -- Stop the loop  
         CombatLoopConnection:Disconnect()  
         CombatLoopConnection = nil  
-        -- Stop all secondary kill loops  
         for player, _ in pairs(KillLoopTracker) do  
             KillLoopTracker[player] = nil  
         end  
@@ -283,17 +292,16 @@ end
 
 -- Connect setup functions to player character events  
 LP.CharacterAdded:Connect(function(char)  
-    -- Wait for the character to load fully  
     char:WaitForChild("HumanoidRootPart", 5)  
     setupCharacter(char)  
 end)  
 
--- Initial setup if character already exists  
 if LP.Character then  
     setupCharacter(LP.Character)  
 end  
 
 -- COMMAND INTEGRATION --  
+-- These functions now correctly control the new combat logic.  
 
 local function addTarget(playerName)  
     local player = findPlayer(playerName)  
@@ -301,7 +309,7 @@ local function addTarget(playerName)
         if not table.find(Targets, player) then  
             table.insert(Targets, 1, player)  
             sendMessage("Target added: " .. player.Name)  
-            setCombatLoop(true) -- Ensure loop is active  
+            setCombatLoop(true)  
         else  
             sendMessage(player.Name .. " is already a target.")  
         end  
@@ -327,14 +335,13 @@ local function removeTarget(playerName)
         for i, target in ipairs(Targets) do  
             if target == playerToRemove then  
                 table.remove(Targets, i)  
-                KillLoopTracker[playerToRemove] = nil -- Stop the kill loop for this player  
+                KillLoopTracker[playerToRemove] = nil  
                 sendMessage("Target removed: " .. playerToRemove.Name)  
                 break  
             end  
         end  
     end  
     
-    -- If aura is off and no targets remain, stop the loop  
     if not AuraEnabled and #Targets == 0 then  
         setCombatLoop(false)  
     end  
@@ -822,5 +829,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (v71 - Loop Msg Fix)")  
+sendMessage("Script Executed - Floxy (v72 - Loop Msg Fix)")  
 print("Floxy System Loaded. User Authorized.")
