@@ -1,10 +1,10 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v62 - Aura Visibility)  
+    Floxy Script - Fixed by luxx (v63 - Bang Command)  
 
-    UPDATES (v62 - Aura Visibility):  
-    - NEW: Added `.aura see` command to make the hitbox slightly visible (0.7 transparency).  
-    - NEW: Added `.aura unsee` command to make the hitbox completely invisible again (default).  
-    - FUNCTIONALITY: The script now remembers your visibility choice and applies it whenever you equip a new tool.  
+    UPDATES (v63):  
+    - ADDED: `.bang [username]` command to teleport behind and strafe-attack a target.  
+    - ADDED: `.unbang` command to stop the bang loop.  
+    - CLEANED: This version is a direct update to v62, without the extra connection/auth features.  
 ]]  
 
 -- Services  
@@ -35,6 +35,8 @@ local safeZonePlatform = nil
 local spinConnection = nil  
 local spinTarget = nil  
 local AwaitingRejoinConfirmation = false  
+local BangTarget = nil          -- v63: For .bang command  
+local BangConnection = nil      -- v63: Connection for the bang loop  
 
 -- Pre-loaded Instances  
 local ChangeTimeEvent = nil  
@@ -42,7 +44,7 @@ local ChangeTimeEvent = nil
 -- Configuration  
 local Dist = 0  
 local AuraEnabled = false  
-local AuraVisible = false -- NEW: State for aura visibility  
+local AuraVisible = false  
 local DMG_TIMES = 2  
 local FT_TIMES = 5  
 local SPIN_RADIUS = 7  
@@ -52,34 +54,20 @@ local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)
 local SAFE_ZONE_OFFSET = Vector3.new(0, 15, 0)  
 local FROG_JUMP_HEIGHT = 10  
 local FROG_JUMP_PREP_DIST = 3  
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygqUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0Pz22"  
-
--- Authorization  
-local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygqUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0Pz22" -- Note: This is from the original script but not used without a function call.  
 
 -- ==================================  
 -- ==      HELPER FUNCTIONS        ==  
 -- ==================================  
 
-local function isAuthorized(userId)  
-    for _, id in ipairs(AuthorizedUsers) do if userId == id then return true end end  
-    return false  
-end  
-
-if not isAuthorized(LP.UserId) then  
-    warn("Floxy Script: User not authorized. Halting execution.")  
-    return  
-end  
-
 local function sendWebhook(payload)  
-    pcall(function()  
-        HttpService:PostAsync(WEBHOOK_URL, HttpService:JSONEncode(payload))  
-    end)  
+    pcall(function() HttpService:PostAsync(WEBHOOK_URL, HttpService:JSONEncode(payload)) end)  
 end  
 
-local function sendMessage(message)  
+local function sendMessage(message, channel)  
     pcall(function()  
-        TextChatService.ChatInputBarConfiguration.TargetTextChannel:SendAsync(message)  
+        local targetChannel = channel or (TextChatService and TextChatService.ChatInputBarConfiguration and TextChatService.ChatInputBarConfiguration.TargetTextChannel)  
+        if targetChannel then targetChannel:SendAsync(message) end  
     end)  
 end  
 
@@ -87,9 +75,7 @@ local function findPlayer(partialName)
     if not partialName then return nil end  
     local lowerName = tostring(partialName):lower()  
     for _, player in ipairs(Players:GetPlayers()) do  
-        if player.Name:lower():find(lowerName, 1, true) then  
-            return player  
-        end  
+        if player.Name:lower():find(lowerName, 1, true) then return player end  
     end  
     return nil  
 end  
@@ -113,10 +99,11 @@ local function createReachPart(tool)
         local handle = tool.Handle  
         if not handle:FindFirstChild("BoxReachPart") then  
             local p = Instance.new("Part", handle)  
-            p.Name = "BoxReachPart"; p.Size = Vector3.new(Dist, Dist, Dist)  
-            -- CORRECTED: Set transparency based on the AuraVisible state  
+            p.Name = "BoxReachPart"  
+            p.Size = Vector3.new(Dist, Dist, Dist)  
             p.Transparency = AuraVisible and 0.7 or 1  
-            p.CanCollide = false; p.Massless = true  
+            p.CanCollide = false  
+            p.Massless = true  
             local w = Instance.new("WeldConstraint", p)  
             w.Part0, w.Part1 = handle, p  
         end  
@@ -135,13 +122,16 @@ local function killLoop(player, toolPart)
     KillStates[player] = true  
     task.spawn(function()  
         while KillStates[player] and player.Parent and LP.Character do  
-            local targetChar = player.Character; local myChar = LP.Character  
+            local targetChar = player.Character  
+            local myChar = LP.Character  
             local tool = toolPart.Parent  
             if not (targetChar and targetChar:FindFirstChildOfClass("Humanoid") and targetChar.Humanoid.Health > 0 and myChar and tool and tool.Parent == myChar) then  
                 break  
             end  
             for _, part in ipairs(targetChar:GetDescendants()) do  
-                if part:IsA("BasePart") then fireTouch(toolPart, part) end  
+                if part:IsA("BasePart") then  
+                    fireTouch(toolPart, part)  
+                end  
             end  
             task.wait()  
         end  
@@ -155,7 +145,9 @@ local function attackPlayer(toolPart, player)
     pcall(function() toolPart.Parent:Activate() end)  
     for _ = 1, DMG_TIMES do  
         for _, part in ipairs(targetChar:GetDescendants()) do  
-            if part:IsA("BasePart") then fireTouch(toolPart, part) end  
+            if part:IsA("BasePart") then  
+                fireTouch(toolPart, part)  
+            end  
         end  
     end  
     killLoop(player, toolPart)  
@@ -163,16 +155,16 @@ end
 
 local function onHeartbeat()  
     if not LP.Character or not LP.Character.PrimaryPart then return end  
+
     local myPos = LP.Character.PrimaryPart.Position  
     local myHumanoid = LP.Character:FindFirstChildOfClass("Humanoid")  
 
     if FollowTarget and FollowTarget.Character and FollowTarget.Character.PrimaryPart and myHumanoid and not safeZoneConnection then  
-        local targetPos = FollowTarget.Character.PrimaryPart.Position  
-        if (targetPos - myPos).Magnitude > 5 then  
-            myHumanoid:MoveTo(targetPos)  
+        if (FollowTarget.Character.PrimaryPart.Position - myPos).Magnitude > 5 then  
+            myHumanoid:MoveTo(FollowTarget.Character.PrimaryPart.Position)  
         end  
     end  
-    
+
     if SpammingEnabled then  
         local tool = LP.Character:FindFirstChildOfClass("Tool")  
         if tool then pcall(function() tool:Activate() end) end  
@@ -183,13 +175,11 @@ local function onHeartbeat()
             local hitbox = tool:FindFirstChild("BoxReachPart") or tool:FindFirstChild("Handle")  
             if hitbox then  
                 for _, player in ipairs(PlayerList) do  
-                    if player ~= LP and player.Character and player.Character.PrimaryPart and player.Character:FindFirstChildOfClass("Humanoid").Health > 0 then  
-                        if not table.find(Whitelist, player.Name) then  
-                            local isTargeted = table.find(Targets, player.Name)  
-                            local inAuraRange = AuraEnabled and (player.Character.PrimaryPart.Position - myPos).Magnitude <= Dist  
-                            if isTargeted or inAuraRange then  
-                                attackPlayer(hitbox, player)  
-                            end  
+                    if player ~= LP and player.Character and player.Character.PrimaryPart and player.Character:FindFirstChildOfClass("Humanoid").Health > 0 and not table.find(Whitelist, player.Name) then  
+                        local isTargeted = table.find(Targets, player.Name)  
+                        local inAuraRange = AuraEnabled and (player.Character.PrimaryPart.Position - myPos).Magnitude <= Dist  
+                        if isTargeted or inAuraRange then  
+                            attackPlayer(hitbox, player)  
                         end  
                     end  
                 end  
@@ -202,6 +192,46 @@ end
 -- ==      COMMANDS & CONTROLS     ==  
 -- ==================================  
 
+-- v63: Functions to control the bang loop  
+local function stopBangLoop()  
+    if BangConnection and BangConnection.Connected then  
+        BangConnection:Disconnect()  
+        BangConnection = nil  
+        BangTarget = nil  
+        local myHumanoid = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")  
+        if myHumanoid then myHumanoid:Move(Vector3.new(0,0,0)) end -- Stop movement  
+    end  
+end  
+
+local function startBangLoop(targetPlayer)  
+    stopBangLoop() -- Stop any previous loop  
+    BangTarget = targetPlayer  
+    
+    BangConnection = RunService.Heartbeat:Connect(function()  
+        local myChar = LP.Character  
+        local targetChar = BangTarget and BangTarget.Character  
+        
+        if not (myChar and myChar.PrimaryPart and targetChar and targetChar.PrimaryPart and targetChar.Humanoid and targetChar.Humanoid.Health > 0) then  
+            sendMessage("Bang target lost. Disabling.")  
+            stopBangLoop()  
+            return  
+        end  
+        
+        local myHrp = myChar.PrimaryPart  
+        local targetHrp = targetChar.PrimaryPart  
+        
+        -- Teleport behind the target, looking at them  
+        local behindPos = targetHrp.CFrame * CFrame.new(0, 0, 3) -- A bit further back  
+        teleportTo(myChar, CFrame.new(behindPos.Position, targetHrp.Position))  
+        
+        -- Rapid W/S movement (strafe)  
+        local moveDir = (tick() % 2 > 1) and myHrp.CFrame.LookVector or -myHrp.CFrame.LookVector  
+        myChar.Humanoid:Move(moveDir)  
+    end)  
+    
+    sendMessage("Banging " .. targetPlayer.Name)  
+end  
+
 local function setAuraVisibility(visible)  
     AuraVisible = visible  
     local transparency = visible and 0.7 or 1  
@@ -209,38 +239,36 @@ local function setAuraVisibility(visible)
         for _, tool in ipairs(LP.Character:GetDescendants()) do  
             if tool:IsA("Tool") then  
                 local hitbox = tool:FindFirstChild("BoxReachPart")  
-                if hitbox then  
-                    hitbox.Transparency = transparency  
-                end  
+                if hitbox then hitbox.Transparency = transparency end  
             end  
         end  
     end  
     sendMessage("Aura visibility set to " .. (visible and "ON" or "OFF"))  
 end  
 
+
 local function changeTime(count)  
     local num = tonumber(count)  
     if not num or num <= 0 then return end  
-    
     if not ChangeTimeEvent then  
-        sendMessage("Error: Time event not loaded yet. Please wait a moment and try again.")  
+        sendMessage("Error: Time event not loaded.")  
         return  
     end  
-
     for i = 1, num do  
         ChangeTimeEvent:FireServer("Anti333Exploitz123FF45324", 433, 429)  
     end  
     sendMessage("Time command executed " .. num .. " times.")  
 end  
 
+
 local function frogJump()  
     local myChar = LP.Character  
     if not (myChar and myChar.PrimaryPart) then return end  
-    
+
     local startPos = myChar.PrimaryPart.Position  
     local prepPos = startPos - Vector3.new(0, FROG_JUMP_PREP_DIST, 0)  
     local finalPos = startPos + Vector3.new(0, FROG_JUMP_HEIGHT, 0)  
-    
+
     teleportTo(myChar, prepPos)  
     task.wait(0.05)  
     teleportTo(myChar, finalPos)  
@@ -306,9 +334,9 @@ end
 local function killOnce(playerName)  
     local player = findPlayer(playerName)  
     if not player or not player.Character or not player.Character:FindFirstChild("Humanoid") then return end  
-    
+
     addTarget(playerName)  
-    
+
     local humanoid = player.Character:FindFirstChild("Humanoid")  
     local connection  
     connection = humanoid.Died:Connect(function()  
@@ -328,15 +356,15 @@ local function spinLoop()
             stopSpinLoop()  
             return  
         end  
-        
+
         local targetPos = spinTarget.Character.PrimaryPart.Position  
         local angle = tick() * SPIN_SPEED  
         local x = targetPos.X + SPIN_RADIUS * math.cos(angle)  
         local z = targetPos.Z + SPIN_RADIUS * math.sin(angle)  
-        
+
         local myNewPos = Vector3.new(x, targetPos.Y + SPIN_HEIGHT_OFFSET, z)  
         local lookAtPos = Vector3.new(targetPos.X, myNewPos.Y, targetPos.Z)  
-        
+
         teleportTo(LP.Character, CFrame.new(myNewPos, lookAtPos))  
     end)  
 end  
@@ -347,7 +375,7 @@ local function setAura(range)
         Dist = newRange  
         AuraEnabled = newRange > 0  
         forceEquip(AuraEnabled or #Targets > 0)  
-        
+
         if LP.Character then  
             for _, tool in ipairs(LP.Character:GetDescendants()) do  
                 if tool:IsA("Tool") and tool:FindFirstChild("BoxReachPart") then  
@@ -378,6 +406,7 @@ local function displayCommands()
 .kill [user], .loop [user|all], .unloop [user|all]  
 .aura [range|off], .aura [see|unsee], .aura whitelist [user], .aura unwhitelist [user]  
 .to [user], .follow [user], .unfollow, .spin [user], .unspin, .spinspeed [val]  
+.bang [user], .unbang -- v63: New Commands  
 ]]  
     local commandList_2 = [[  
 .safe, .unsafe, .safezone [user], .unsafezone  
@@ -399,7 +428,7 @@ local function onCharacterDied(humanoid)
     if killerTag and killerTag.Value then  
         killerName = killerTag.Value.Name  
     end  
-    
+
     local payload = {  
         content = "Player " .. LP.Name .. " died. Killed by: " .. killerName,  
         username = "Death Notifier"  
@@ -410,7 +439,7 @@ end
 local function onMessageReceived(messageData)  
     local text = messageData.Text  
     if not text or not messageData.TextSource then return end  
-    
+
     local authorPlayer = Players:GetPlayerByUserId(messageData.TextSource.UserId)  
     if not authorPlayer then return end  
 
@@ -474,7 +503,6 @@ local function onMessageReceived(messageData)
         else  
             removeTarget(arg2)  
         end  
-    -- CORRECTED: Added logic for visibility commands  
     elseif command == ".aura" and arg2 then  
         if arg2:lower() == "off" then  
             setAura(0)  
@@ -529,7 +557,7 @@ local function onMessageReceived(messageData)
     elseif command == ".unfollow" then  
         FollowTarget = nil  
         stopSafeZoneLoop()  
-    elseif command == ".cmds" then  
+    elseif command == ".cmds" or command == ".help" then -- Added .help as an alias  
         displayCommands()  
     elseif command == ".count" then  
         local playerCount = #Players:GetPlayers()  
@@ -578,7 +606,7 @@ local function onMessageReceived(messageData)
                 local spawnPoint = spawns:IsA("SpawnLocation") and spawns or spawns:GetChildren()[1]  
                 if spawnPoint then  
                     teleportTo(LP.Character, spawnPoint.Position + Vector3.new(0, 5, 0))  
-                else   
+                else  
                      if LP.Character.Humanoid then LP.Character.Humanoid.Health = 0 end  
                 end  
             else  
@@ -590,14 +618,11 @@ local function onMessageReceived(messageData)
         if not (targetPlayer and LP.Character and LP.Character.PrimaryPart) then return end  
         stopSafeZoneLoop()  
         FollowTarget = targetPlayer  
-        
+
         safeZonePlatform = Instance.new("Part", Workspace)  
-        safeZonePlatform.Name = "SafeZonePlatform"  
-        safeZonePlatform.Size = Vector3.new(12, 2, 12)  
-        safeZonePlatform.Transparency = 0.5  
-        safeZonePlatform.Anchored = true  
-        safeZonePlatform.CanCollide = true  
-        
+        safeZonePlatform.Name = "SafeZonePlatform"; safeZonePlatform.Size = Vector3.new(12, 2, 12)  
+        safeZonePlatform.Transparency = 0.5; safeZonePlatform.Anchored = true; safeZonePlatform.CanCollide = true  
+
         safeZoneConnection = RunService.Heartbeat:Connect(function()  
             if not (FollowTarget and FollowTarget.Character and FollowTarget.Character.PrimaryPart and LP.Character and LP.Character.PrimaryPart and safeZonePlatform and safeZonePlatform.Parent) then  
                 sendMessage("Safezone target or self lost. Disabling.")  
@@ -606,15 +631,25 @@ local function onMessageReceived(messageData)
             end  
 
             local targetPos = FollowTarget.Character.PrimaryPart.Position  
-            local platformNewPos = targetPos + SAFE_ZONE_OFFSET  
-            safeZonePlatform.Position = platformNewPos  
-            
+            local platformNewPos = targetPos + SAFE_ZONE_OFFSET; safeZonePlatform.Position = platformNewPos  
+
             local myHRP = LP.Character.PrimaryPart  
             local myNewPos = platformNewPos + Vector3.new(0, (safeZonePlatform.Size.Y / 2) + (myHRP.Size.Y / 2), 0)  
             teleportTo(LP.Character, CFrame.new(myNewPos) * (myHRP.CFrame - myHRP.CFrame.Position))  
         end)  
     elseif command == ".unsafezone" then  
         stopSafeZoneLoop()  
+    -- v63: Handle new bang commands  
+    elseif command == ".bang" and arg2 then  
+        local targetPlayer = findPlayer(arg2)  
+        if targetPlayer and targetPlayer ~= LP then  
+            startBangLoop(targetPlayer)  
+        else  
+            sendMessage("Player not found or you targeted yourself.")  
+        end  
+    elseif command == ".unbang" then  
+        stopBangLoop()  
+        sendMessage("Bang loop stopped.")  
     elseif command == ".test" then  
         pcall(function()  
             loadstring(game:HttpGet('https://raw.githubusercontent.com/JarcoCZ/Control-Script/refs/heads/main/test.lua'))()  
@@ -624,21 +659,22 @@ end
 
 local function onCharacterAdded(char)  
     stopSafeZoneLoop()  
+    stopBangLoop() -- v63: Stop bang loop on death/respawn  
     local humanoid = char:WaitForChild("Humanoid", 10)  
     if humanoid then  
         humanoid.Died:Connect(function() onCharacterDied(humanoid) end)  
     end  
-    
+
     for _, item in ipairs(char:GetChildren()) do createReachPart(item) end  
     char.ChildAdded:Connect(createReachPart)  
-    
+
     if #Targets > 0 or AuraEnabled then forceEquip(true) end  
-    
+
     if DeathPositions[LP.Name] then  
         local hrp = char:WaitForChild("HumanoidRootPart", 10)  
         if hrp then task.wait(0.5); hrp.CFrame = DeathPositions[LP.Name]; DeathPositions[LP.Name] = nil end  
     end  
-    
+
     if not HeartbeatConnection or not HeartbeatConnection.Connected then  
         HeartbeatConnection = RunService.Heartbeat:Connect(onHeartbeat)  
     end  
@@ -665,6 +701,7 @@ if LP.Character then onCharacterAdded(LP.Character) end
 Players.PlayerAdded:Connect(function(p) table.insert(PlayerList, p) end)  
 Players.PlayerRemoving:Connect(function(p)  
     if spinTarget and spinTarget == p then stopSpinLoop() end  
+    if BangTarget and BangTarget == p then stopBangLoop() end -- v63: Stop if target leaves  
     removeTarget(p.Name)  
     for i, pl in ipairs(PlayerList) do if pl == p then table.remove(PlayerList, i); break end end  
     for i, u in ipairs(ConnectedUsers) do if u == p then table.remove(ConnectedUsers, i); break end end  
@@ -679,5 +716,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v62)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v63)")  
 print("Floxy System Loaded. User Authorized.")
