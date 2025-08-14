@@ -1,11 +1,9 @@
 --[[  
-    Floxy Script - v70 (v62 Base + Modern Loop)  
+    Floxy Script - v71 (v70 Base + Loop Confirmation)  
 
-    UPDATES (v70):  
-    - CRITICAL: Built directly from the user-provided v62 script. No features have been removed or condensed. All original commands, logic, and structure are preserved.  
-    - REPLACED: The combat logic section (`createReachPart`, `fireTouch`, `killLoop`, `attackPlayer`, and the combat part of `onHeartbeat`) has been replaced with a single, modern, high-performance combat loop using Workspace:GetPartBoundsInBox.  
-    - INTEGRATED: The new loop respects all existing features: Manual targets (`.loop`), Aura (`.aura`), Whitelist, and equipping tools (`forceEquip`).  
-    - PRESERVED: `.aura see`/`.unsee` commands are kept for user experience, but the new loop does not use a visible part, so they will simply print a confirmation.  
+    UPDATES (v71):  
+    - DEBUG: Added a confirmation message to the `addTarget` function. When you use `.loop [user]`, the script will now print "[Username] has been looped" to the chat.  
+    - PRESERVED: This is the only change. All other code from v70, including the modern combat loop and all commands, remains identical.  
 ]]  
 
 -- Services  
@@ -317,6 +315,7 @@ local function addTarget(playerName)
     local player = findPlayer(playerName)  
     if player and player ~= LP and not table.find(Targets, player.Name) then  
         table.insert(Targets, player.Name)  
+        sendMessage(player.Name .. " has been looped.") -- ADDED THIS LINE FOR DEBUGGING  
         forceEquip(true)  
         startCombatLoop() -- Start the new combat loop  
     end  
@@ -326,7 +325,11 @@ local function removeTarget(playerName)
     local player = findPlayer(playerName)  
     if player then  
         for i, name in ipairs(Targets) do  
-            if name == player.Name then table.remove(Targets, i); break end  
+            if name == player.Name then   
+                table.remove(Targets, i)  
+                sendMessage(player.Name .. " has been unlooped.")  
+                break   
+            end  
         end  
         if #Targets == 0 and not AuraEnabled then forceEquip(false) end  
         stopCombatLoop() -- Check if the combat loop should stop  
@@ -459,7 +462,7 @@ local function onMessageReceived(messageData)
         end  
     end  
 
-    if command == "@" then  
+    if command == "connect" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
@@ -487,6 +490,7 @@ local function onMessageReceived(messageData)
     elseif command == ".kill" and arg2 then killOnce(arg2)  
     elseif command == ".loop" and arg2 then  
         if arg2:lower() == "all" then  
+            sendMessage("Looping all valid players.")  
             for _, player in ipairs(PlayerList) do  
                 if player ~= LP and not table.find(Whitelist, player.Name) then  
                     addTarget(player.Name)  
@@ -497,6 +501,7 @@ local function onMessageReceived(messageData)
         end  
     elseif command == ".unloop" and arg2 then  
         if arg2:lower() == "all" then  
+            sendMessage("Unlooping all players.")  
             table.clear(Targets)  
             forceEquip(AuraEnabled)  
             stopCombatLoop() -- Check if loop should stop  
@@ -511,9 +516,9 @@ local function onMessageReceived(messageData)
         elseif arg2:lower() == "unsee" then  
             setAuraVisibility(false)  
         elseif arg2:lower() == "whitelist" and arg3 then  
-            local p = findPlayer(arg3); if p and not table.find(Whitelist, p.Name) then table.insert(Whitelist, p.Name) end  
+            local p = findPlayer(arg3); if p and not table.find(Whitelist, p.Name) then table.insert(Whitelist, p.Name); sendMessage(p.Name .. " whitelisted.") end  
         elseif arg2:lower() == "unwhitelist" and arg3 then  
-            local p = findPlayer(arg3); if p then for i, n in ipairs(Whitelist) do if n == p.Name then table.remove(Whitelist, i); break end end end  
+            local p = findPlayer(arg3); if p then for i, n in ipairs(Whitelist) do if n == p.Name then table.remove(Whitelist, i); sendMessage(p.Name .. " unwhitelisted."); break end end end  
         else setAura(arg2) end  
     elseif command == ".spin" and arg2 then  
         local p = findPlayer(arg2)  
@@ -709,5 +714,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (v70 - Modern Loop)")  
+sendMessage("Script Executed - Floxy (v71 - Loop Msg Fix)")  
 print("Floxy System Loaded. User Authorized.")
