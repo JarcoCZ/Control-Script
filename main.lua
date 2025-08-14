@@ -722,5 +722,5 @@ if LP.Character then
 end  
 LP.CharacterAdded:Connect(onCharacterAdded)  
 
--- sendMessage("Script Executed - Floxy (v60 - Optimized & Pre-Respawn Attack)") -- Removed  
+sendMessage("Script Executed - Floxy (v60 - Optimized & Pre-Respawn Attack)") -- Removed  
 -- print("Floxy System Loaded. User Authorized.") -- Removed
