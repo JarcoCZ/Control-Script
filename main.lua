@@ -722,5 +722,5 @@ if LP.Character then
 end  
 LP.CharacterAdded:Connect(onCharacterAdded)  
 
-sendMessage("v60") -- Removed  
+sendMessage("v60)") -- Removed  
 -- print("Floxy System Loaded. User Authorized.") -- Removed
