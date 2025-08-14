@@ -744,6 +744,6 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (v72 - TP Commands)")  
+sendMessage("Script Executed - Floxy (LOOP UPDATE V72")  
 print("Floxy System Loaded. User Authorized.")
        
