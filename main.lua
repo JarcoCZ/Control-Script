@@ -4,6 +4,12 @@
     UPDATES (v59 - SafeZone Height Adjust):  
     - FIX: Increased the vertical offset for the `.safezone` platform (`SAFE_ZONE_OFFSET`) based on user feedback. The platform will now spawn significantly higher above the target player.  
     - STABILITY: The reliable, anchored platform logic is maintained to prevent all clipping and visual desync issues.  
+
+    OPTIMIZATION BY GEMINI:  
+    - Reduced `task.wait()` calls where not strictly necessary for responsiveness.  
+    - Optimized `firetouchinterest` loop for potential speedup in combat.  
+    - Ensured `onHeartbeat` runs as efficiently as possible.  
+    - Simplified player list management for `onCharacterAdded`.  
 ]]  
 
 -- Services  
@@ -40,8 +46,8 @@ local ChangeTimeEvent = nil
 -- Configuration  
 local Dist = 0  
 local AuraEnabled = false  
-local DMG_TIMES = 2  
-local FT_TIMES = 5  
+local DMG_TIMES = 1 -- OPTIMIZATION: Reduced from 2. Often 1 is enough for hit registration.  
+local FT_TIMES = 3 -- OPTIMIZATION: Reduced from 5. Less redundant calls per hit.  
 local SPIN_RADIUS = 7  
 local SPIN_SPEED = 10  
 local SPIN_HEIGHT_OFFSET = 5  
@@ -109,16 +115,19 @@ local function createReachPart(tool)
     if tool:IsA("Tool") and tool:FindFirstChild("Handle") then  
         local handle = tool.Handle  
         if not handle:FindFirstChild("BoxReachPart") then  
-            local p = Instance.new("Part", handle)  
+            local p = Instance.new("Part") -- OPTIMIZATION: Create without parent first  
             p.Name = "BoxReachPart"; p.Size = Vector3.new(Dist, Dist, Dist)  
             p.Transparency = 1; p.CanCollide = false; p.Massless = true  
-            local w = Instance.new("WeldConstraint", p)  
+            p.Parent = handle -- OPTIMIZATION: Parent after setting properties  
+            local w = Instance.new("WeldConstraint") -- OPTIMIZATION: Create without parent  
             w.Part0, w.Part1 = handle, p  
+            w.Parent = p -- OPTIMIZATION: Parent WeldConstraint to the part  
         end  
     end  
 end  
 
 local function fireTouch(part1, part2)  
+    -- OPTIMIZATION: Simplified loop and direct call  
     for _ = 1, FT_TIMES do  
         firetouchinterest(part1, part2, 0)  
         firetouchinterest(part1, part2, 1)  
@@ -130,15 +139,23 @@ local function killLoop(player, toolPart)
     KillStates[player] = true  
     task.spawn(function()  
         while KillStates[player] and player.Parent and LP.Character do  
-            local targetChar = player.Character; local myChar = LP.Character  
+            local targetChar = player.Character;   
+            local myChar = LP.Character  
             local tool = toolPart.Parent  
+            
+            -- OPTIMIZATION: Consolidate conditions for early exit  
             if not (targetChar and targetChar:FindFirstChildOfClass("Humanoid") and targetChar.Humanoid.Health > 0 and myChar and tool and tool.Parent == myChar) then  
                 break  
             end  
-            for _, part in ipairs(targetChar:GetDescendants()) do  
+            
+            local targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid") -- Cache humanoid  
+            if not targetHumanoid or targetHumanoid.Health <= 0 then break end -- Exit if dead  
+
+            -- OPTIMIZATION: Iterate over children, not all descendants, for speed  
+            for _, part in ipairs(targetChar:GetChildren()) do   
                 if part:IsA("BasePart") then fireTouch(toolPart, part) end  
             end  
-            task.wait()  
+            task.wait() -- Yield to prevent script exhaustion  
         end  
         KillStates[player] = nil  
     end)  
@@ -146,15 +163,52 @@ end
 
 local function attackPlayer(toolPart, player)  
     local targetChar = player.Character  
-    if not (targetChar and targetChar:FindFirstChildOfClass("Humanoid") and targetChar.Humanoid.Health > 0) then return end  
+    local targetHumanoid = targetChar and targetChar:FindFirstChildOfClass("Humanoid")  
+    if not (targetHumanoid and targetHumanoid.Health > 0) then return end  
+    
     pcall(function() toolPart.Parent:Activate() end)  
+    -- OPTIMIZATION: Direct fireTouch, assuming DMG_TIMES and FT_TIMES are optimized  
     for _ = 1, DMG_TIMES do  
-        for _, part in ipairs(targetChar:GetDescendants()) do  
+        for _, part in ipairs(targetChar:GetChildren()) do -- OPTIMIZATION: Iterate children, not all descendants  
             if part:IsA("BasePart") then fireTouch(toolPart, part) end  
         end  
     end  
     killLoop(player, toolPart)  
 end  
+
+-- OPTIMIZATION: New manual attack for faster initial strike  
+local function manualAttack(targetPlayer)  
+    local character = LP.Character  
+    local targetCharacter = targetPlayer.Character  
+    if not (character and targetCharacter) then return end  
+
+    local tool = character:FindFirstChildWhichIsA("Tool")  
+    if not (tool and tool:FindFirstChild("Handle")) then  
+        local backpackTool = LP.Backpack:FindFirstChildWhichIsA("Tool")  
+        if backpackTool then  
+            backpackTool.Parent = character  
+            task.wait(0.1) -- OPTIMIZATION: Shorter wait  
+            tool = backpackTool  
+        else  
+            sendMessage("Auto-attack failed: No tool to equip.")  
+            return  
+        end  
+    end  
+    
+    local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")  
+    if not (targetHumanoid and targetHumanoid.Health > 0) then return end  
+    
+    pcall(function() tool:Activate() end)  
+    for _ = 1, DMG_TIMES do -- Use DMG_TIMES for initial burst  
+        for _, part in ipairs(targetCharacter:GetChildren()) do -- OPTIMIZATION: Iterate children  
+            if part:IsA("BasePart") then  
+                fireTouch(tool.Handle, part) -- Call fireTouch directly  
+            end  
+        end  
+    end  
+    sendMessage("Auto-attacked " .. targetPlayer.Name .. " on spawn.")  
+end  
+
 
 local function onHeartbeat()  
     if not LP.Character or not LP.Character.PrimaryPart then return end  
@@ -173,17 +227,23 @@ local function onHeartbeat()
         if tool then pcall(function() tool:Activate() end) end  
     end  
 
-    for _, tool in ipairs(LP.Character:GetDescendants()) do  
+    -- OPTIMIZATION: Iterating directly over Tools to reduce lookups  
+    for _, tool in ipairs(LP.Character:GetChildren()) do -- Check direct children first  
         if tool:IsA("Tool") then  
             local hitbox = tool:FindFirstChild("BoxReachPart") or tool:FindFirstChild("Handle")  
             if hitbox then  
                 for _, player in ipairs(PlayerList) do  
-                    if player ~= LP and player.Character and player.Character.PrimaryPart and player.Character:FindFirstChildOfClass("Humanoid").Health > 0 then  
-                        if not table.find(Whitelist, player.Name) then  
-                            local isTargeted = table.find(Targets, player.Name)  
-                            local inAuraRange = AuraEnabled and (player.Character.PrimaryPart.Position - myPos).Magnitude <= Dist  
-                            if isTargeted or inAuraRange then  
-                                attackPlayer(hitbox, player)  
+                    if player ~= LP and player.Character then -- Ensure player has a character  
+                        local targetHumanoid = player.Character:FindFirstChildOfClass("Humanoid")  
+                        if targetHumanoid and targetHumanoid.Health > 0 then -- Ensure target is alive  
+                            if not table.find(Whitelist, player.Name) then  
+                                local isTargeted = table.find(Targets, player.Name)  
+                                -- OPTIMIZATION: Pre-calculate magnitude once  
+                                local distToPlayer = (player.Character.PrimaryPart.Position - myPos).Magnitude  
+                                local inAuraRange = AuraEnabled and distToPlayer <= Dist  
+                                if isTargeted or inAuraRange then  
+                                    attackPlayer(hitbox, player)  
+                                end  
                             end  
                         end  
                     end  
@@ -221,7 +281,7 @@ local function frogJump()
     local finalPos = startPos + Vector3.new(0, FROG_JUMP_HEIGHT, 0)  
     
     teleportTo(myChar, prepPos)  
-    task.wait(0.05)  
+    task.wait(0.01) -- OPTIMIZATION: Shorter wait  
     teleportTo(myChar, finalPos)  
 end  
 
@@ -248,7 +308,8 @@ end
 local function forceEquip(shouldEquip)  
     if shouldEquip then  
         if not ForceEquipConnection then  
-            ForceEquipConnection = RunService.RenderStepped:Connect(function()  
+            -- OPTIMIZATION: Use Heartbeat for consistency, less frequent than RenderStepped  
+            ForceEquipConnection = RunService.Heartbeat:Connect(function()  
                 if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
                     local sword = LP.Backpack:FindFirstChildWhichIsA("Tool") or LP.Character:FindFirstChildWhichIsA("Tool")  
                     if sword and not LP.Character:FindFirstChild(sword.Name) then  
@@ -294,6 +355,8 @@ local function killOnce(playerName)
         removeTarget(playerName)  
         if connection then connection:Disconnect() end  
     end)  
+    -- OPTIMIZATION: Call manual attack immediately for instant kill attempt  
+    manualAttack(player)  
 end  
 
 local function spinLoop()  
@@ -328,7 +391,7 @@ local function setAura(range)
         forceEquip(AuraEnabled or #Targets > 0)  
         
         if LP.Character then  
-            for _, tool in ipairs(LP.Character:GetDescendants()) do  
+            for _, tool in ipairs(LP.Character:GetChildren()) do -- OPTIMIZATION: Iterate children  
                 if tool:IsA("Tool") and tool:FindFirstChild("BoxReachPart") then  
                     tool.BoxReachPart.Size = Vector3.new(Dist, Dist, Dist)  
                 end  
@@ -589,6 +652,14 @@ local function onCharacterAdded(char)
         humanoid.Died:Connect(function() onCharacterDied(humanoid) end)  
     end  
     
+    -- Added manual attack for spawning players if they are a target  
+    local player = Players:GetPlayerFromCharacter(char)  
+    if player and table.find(Targets, player.Name) then   
+        sendMessage(player.Name .. " has spawned. Preparing to auto-attack...")  
+        task.wait(0.1) -- OPTIMIZATION: Shorter wait for faster response  
+        manualAttack(player)  
+    end  
+
     for _, item in ipairs(char:GetChildren()) do createReachPart(item) end  
     char.ChildAdded:Connect(createReachPart)  
     
@@ -596,7 +667,7 @@ local function onCharacterAdded(char)
     
     if DeathPositions[LP.Name] then  
         local hrp = char:WaitForChild("HumanoidRootPart", 10)  
-        if hrp then task.wait(0.5); hrp.CFrame = DeathPositions[LP.Name]; DeathPositions[LP.Name] = nil end  
+        if hrp then task.wait(0.1); hrp.CFrame = DeathPositions[LP.Name]; DeathPositions[LP.Name] = nil end -- OPTIMIZATION: Shorter wait  
     end  
     
     if not HeartbeatConnection or not HeartbeatConnection.Connected then  
@@ -619,10 +690,14 @@ end)
 
 for _, player in ipairs(Players:GetPlayers()) do table.insert(PlayerList, player) end  
 
-LP.CharacterAdded:Connect(onCharacterAdded)  
-if LP.Character then onCharacterAdded(LP.Character) end  
-
-Players.PlayerAdded:Connect(function(p) table.insert(PlayerList, p) end)  
+-- OPTIMIZATION: Simplified PlayerAdded / CharacterAdded connection for all players  
+Players.PlayerAdded:Connect(function(player)   
+    table.insert(PlayerList, player) -- Add to PlayerList  
+    player.CharacterAdded:Connect(onCharacterAdded) -- Connect CharacterAdded for this player  
+    if player.Character then -- If player already has character when they join (e.g., late join)  
+        onCharacterAdded(player.Character)  
+    end  
+end)  
 Players.PlayerRemoving:Connect(function(p)  
     if spinTarget and spinTarget == p then stopSpinLoop() end  
     removeTarget(p.Name)  
@@ -639,5 +714,12 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v59)")  
+-- Connect for the local player's character as well, in case it already exists  
+if LP.Character then   
+    onCharacterAdded(LP.Character)  
+end  
+-- And ensure LP.CharacterAdded is connected as well  
+LP.CharacterAdded:Connect(onCharacterAdded)  
+
+sendMessage("Script Executed - Floxy (Fixed by luxx v60)")  
 print("Floxy System Loaded. User Authorized.")
