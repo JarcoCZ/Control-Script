@@ -1,13 +1,11 @@
 --[[  
     Floxy Script - Fully Corrected & Stabilized by luxx (v60 - Optimized & Pre-Respawn Attack - Silent)  
 
-    UPDATES (v60 - Optimized & Pre-Respawn Attack - Silent - True Pre-Respawn Fix):  
-    - Implemented a more aggressive "pre-respawn" attack by attempting to attack immediately when `CharacterAdded` fires for a targeted player, minimizing `task.wait()` before `manualAttack`.  
-    - Removed the `PlayersAboutToRespawn` flag and associated logic as it was not achieving a true pre-respawn attack.  
-    - Simplified the `onCharacterAdded` logic for targeted players to directly trigger `manualAttack`.  
-    - All debug messages (print, warn) and script execution confirmation messages remain removed for silent operation.  
-    - FT_TIMES and DMG_TIMES constants remain reduced for faster hit registration.  
-    - ManualAttack and onCharacterAdded `task.wait()` calls remain shortened for quicker response.  
+    UPDATES (v60 - Optimized & Pre-Respawn Attack - Silent):  
+    - All debug messages (print, warn) and script execution confirmation messages removed for silent operation.  
+    - Implemented logic for a "pre-respawn" attack, triggering immediately upon a target's character loading after death.  
+    - FT_TIMES and DMG_TIMES constants reduced for faster hit registration.  
+    - ManualAttack and onCharacterAdded `task.wait()` calls shortened for quicker response.  
     - Optimized iteration methods in combat loops (e.g., using `GetChildren()` instead of `GetDescendants()` where appropriate).  
     - Minor efficiency improvements in variable caching and part creation.  
     - General cleanup and minor adjustments to existing logic for better performance.  
@@ -30,7 +28,7 @@ local Targets = {}
 local Whitelist = {}  
 local ConnectedUsers = {}  
 local DeathPositions = {}  
--- Removed: local PlayersAboutToRespawn = {} -- Track players who are about to respawn  
+local PlayersAboutToRespawn = {} -- Track players who are about to respawn  
 local FollowTarget = nil  
 local MainConnector = nil  
 local ForceEquipConnection = nil  
@@ -72,11 +70,15 @@ local function isAuthorized(userId)
 end  
 
 if not isAuthorized(LP.UserId) then  
+    -- warn("Floxy Script: User not authorized. Halting execution.") -- Removed  
     return  
 end  
 
 local function sendWebhook(payload)  
     -- Removed Webhook functionality entirely to simplify and remove external dependencies/messages  
+    -- pcall(function()  
+    --     HttpService:PostAsync(WEBHOOK_URL, HttpService:JSONEncode(payload))  
+    -- end)  
 end  
 
 local function sendMessage(message)  
@@ -181,9 +183,10 @@ local function manualAttack(targetPlayer)
         local backpackTool = LP.Backpack:FindFirstChildWhichIsA("Tool")  
         if backpackTool then  
             backpackTool.Parent = character  
-            task.wait(0.05) -- Very small wait after equipping  
+            task.wait(0.1)   
             tool = backpackTool  
         else  
+            -- sendMessage("Auto-attack failed: No tool to equip.") -- Removed  
             return  
         end  
     end  
@@ -199,6 +202,7 @@ local function manualAttack(targetPlayer)
             end  
         end  
     end  
+    -- sendMessage("Auto-attacked " .. targetPlayer.Name .. " on spawn.") -- Removed  
 end  
 
 
@@ -641,11 +645,19 @@ local function onCharacterAdded(char)
     
     local player = Players:GetPlayerFromCharacter(char)  
     if player and table.find(Targets, player.Name) then   
-        -- Attempt to attack immediately, with minimal delay for character parts to load  
-        -- This is the "pre-respawn" aspect - attacking as soon as the character object exists,  
-        -- rather than waiting for it to be fully rendered or for HumanoidRootPart to be ready.  
-        task.wait(0.01) -- Minimal delay  
-        manualAttack(player)  
+        if PlayersAboutToRespawn[player.Name] then  
+            PlayersAboutToRespawn[player.Name] = nil   
+            -- sendMessage(player.Name .. " has respawned. Initiating instant attack...") -- Removed  
+            local hrp = char:WaitForChild("HumanoidRootPart", 1)   
+            if hrp then  
+                task.wait(0.05)   
+                manualAttack(player)  
+            end  
+        else  
+            -- sendMessage(player.Name .. " has spawned. Preparing to auto-attack...") -- Removed  
+            task.wait(0.1)   
+            manualAttack(player)  
+        end  
     end  
 
     for _, item in ipairs(char:GetChildren()) do createReachPart(item) end  
@@ -669,6 +681,11 @@ end
 
 task.spawn(function()  
     ChangeTimeEvent = ReplicatedStorage:WaitForChild("ChangeTime", 30)  
+    -- if ChangeTimeEvent then  
+    --     print("Floxy System: ChangeTime event successfully located.")  -- Removed  
+    -- else  
+    --     warn("Floxy System: ChangeTime event could not be located after 30s.") -- Removed  
+    -- end  
 end)  
 
 for _, player in ipairs(Players:GetPlayers()) do table.insert(PlayerList, player) end  
@@ -681,7 +698,9 @@ Players.PlayerAdded:Connect(function(player)
     end  
 end)  
 Players.PlayerRemoving:Connect(function(p)  
-    -- Removed: PlayersAboutToRespawn[p.Name] = true  
+    if p.Character and p.Character:FindFirstChildOfClass("Humanoid") then   
+        PlayersAboutToRespawn[p.Name] = true  
+    end  
 
     if spinTarget and spinTarget == p then stopSpinLoop() end  
     removeTarget(p.Name)  
@@ -701,6 +720,7 @@ TextChatService.MessageReceived:Connect(onMessageReceived)
 if LP.Character then   
     onCharacterAdded(LP.Character)  
 end  
-LP.CharacterAdded:Connect(onCharacterAdded)
+LP.CharacterAdded:Connect(onCharacterAdded)  
 
-sendMessage("v61")
+sendMessage("v60") -- Removed  
+-- print("Floxy System Loaded. User Authorized.") -- Removed
