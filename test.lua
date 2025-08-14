@@ -108,146 +108,175 @@ end
 -- ==================================  
 
 local AuraEnabled = false  
-local CombatLoopConnection = nil  
-local AURA_RANGE = 25 -- Default distance for aura. Adjust if needed.  
+local CombatLoopConnection = nil -- This will now be a coroutine thread  
+local AURA_RANGE = 50 -- The new script uses a different method, but we can keep this for aura logic.  
 
--- Function to find a usable weapon in the player's character or backpack.  
-local function findWeapon()  
-    if not LP.Character then return nil end  
-    
-    -- Priority 1: Check if a tool is already equipped.  
-    local equippedTool = LP.Character:FindFirstChildOfClass("Tool")  
-    if equippedTool and equippedTool:FindFirstChild("Handle") then  
-        return equippedTool  
+-- This function will now start the new combat loop you provided.  
+local function startCombatLoop()  
+    if CombatLoopConnection then  
+        print("Floxy System: Combat loop is already running.")  
+        return  
     end  
 
-    -- Priority 2: Check the backpack for a suitable tool.  
-    local backpack = LP:FindFirstChildOfClass("Backpack")  
-    if backpack then  
-        -- Prefer a tool named "ClassicSword", but fall back to any valid tool.  
-        local sword = backpack:FindFirstChild("ClassicSword")  
-        if sword and sword:IsA("Tool") and sword:FindFirstChild("Handle") then  
-            return sword  
+    sendMessage("Combat loop started.")  
+    
+    -- Create a new thread for the while loop so it doesn't freeze the whole script  
+    CombatLoopConnection = coroutine.create(function()  
+        local Players = game:GetService("Players")  
+        local RunService = game:GetService("RunService")  
+        local lp = Players.LocalPlayer  
+        local Overlap = OverlapParams.new()  
+        Overlap.FilterType = Enum.RaycastFilterType.Include  
+        
+        -- Helper functions from your script  
+        local function getchar(plr)  
+            return plr and plr.Character  
         end  
-        for _, tool in ipairs(backpack:GetChildren()) do  
-            if tool:IsA("Tool") and tool:FindFirstChild("Handle") then  
-                return tool -- Return the first valid tool found.  
+
+        local function gethumanoid(char)  
+            return char and char:FindFirstChildWhichIsA("Humanoid")  
+        end  
+
+        local function IsAlive(humanoid)  
+            return humanoid and humanoid.Health > 0  
+        end  
+        
+        -- This function relies on your script executor's environment  
+        local function GetTouchInterest(tool)  
+            return tool and tool:FindFirstChildWhichIsA("TouchTransmitter", true)  
+        end  
+        
+        local function Attack(tool, touchPart, toTouch)  
+            if tool and tool:IsDescendantOf(workspace) and typeof(firetouchinterest) == "function" then  
+                tool:Activate()  
+                firetouchinterest(touchPart, toTouch, 1)  
+                firetouchinterest(touchPart, toTouch, 0)  
+            else  
+                warn("Floxy Warning: 'firetouchinterest' is not available in this environment.")  
+                -- Invalidate the loop if the core function is missing  
+                CombatLoopConnection = nil   
             end  
         end  
-    end  
-    
-    return nil -- No weapon found  
-end  
+        
+        -- The main loop  
+        while #Targets > 0 or AuraEnabled do  
+            local char = getchar(lp)  
+            local humanoid = gethumanoid(char)  
+            
+            if IsAlive(humanoid) then  
+                local tool = char and char:FindFirstChildWhichIsA("Tool")  
+                local touchInterest = GetTouchInterest(tool)  
 
--- Equips or unequips the best available weapon.  
-local function forceEquip(shouldEquip)  
-    local weapon = findWeapon()  
-    if not weapon then   
-        warn("Floxy System: No weapon found to equip/unequip.")  
-        return   
-    end  
+                if touchInterest then  
+                    local touchPart = touchInterest.Parent  
+                    
+                    -- Determine which players to attack  
+                    local charactersToAttack = {}  
+                    local potentialTargets = {}  
 
-    local humanoid = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")  
-    if not humanoid then return end  
+                    -- Add manually targeted players first  
+                    for _, player in ipairs(Targets) do  
+                        if player.Character then  
+                           table.insert(potentialTargets, player)  
+                        end  
+                    end  
+                    
+                    -- If Aura is on, add nearby players  
+                    if AuraEnabled then  
+                        for _, player in ipairs(Players:GetPlayers()) do  
+                            if player ~= lp and not table.find(Targets, player) then  
+                                local playerChar = player.Character  
+                                if playerChar and playerChar.PrimaryPart then  
+                                    local dist = (char.PrimaryPart.Position - playerChar.PrimaryPart.Position).Magnitude  
+                                    if dist <= AURA_RANGE then  
+                                        table.insert(potentialTargets, player)  
+                                    end  
+                                end  
+                            end  
+                        end  
+                    end  
+                    
+                    -- Get the character models for the overlap check  
+                    for _, player in ipairs(potentialTargets) do  
+                        if player.Character then  
+                           table.insert(charactersToAttack, player.Character)  
+                        end  
+                    end  
 
-    if shouldEquip and weapon.Parent ~= LP.Character then  
-        humanoid:EquipTool(weapon)  
-        task.wait(0.1) -- Give a small delay for the tool to equip.  
-    elseif not shouldEquip and weapon.Parent == LP.Character then  
-        humanoid:UnequipTools()  
-    end  
-end  
+                    if #charactersToAttack > 0 then  
+                        Overlap.FilterDescendantsInstances = charactersToAttack  
+                        local size = Vector3.new(AURA_RANGE * 2, AURA_RANGE * 2, AURA_RANGE * 2)  
+                        
+                        -- Use the character's position for the bounding box for better accuracy  
+                        local instancesInBox = workspace:GetPartBoundsInBox(  
+                            char.PrimaryPart.CFrame,  
+                            size,  
+                            Overlap  
+                        )  
 
--- Main combat loop function, runs on every frame when active.  
-local function runCombatTick()  
-    -- Stop conditions for the loop  
-    if not AuraEnabled and #Targets == 0 then  
-        if CombatLoopConnection then  
-            CombatLoopConnection:Disconnect()  
-            CombatLoopConnection = nil  
-            forceEquip(false) -- Unequip weapon when combat ends  
-            sendMessage("Combat loop stopped.")  
-            print("Floxy Debug: Loop stopped (no targets and aura is off).")  
+                        for _, partInBox in ipairs(instancesInBox) do  
+                            local partOwnerChar = partInBox:FindFirstAncestorWhichIsA("Model")  
+                            if partOwnerChar and table.find(charactersToAttack, partOwnerChar) then  
+                                local targetHumanoid = gethumanoid(partOwnerChar)  
+                                if IsAlive(targetHumanoid) then  
+                                    Attack(tool, touchPart, partInBox)  
+                                    -- Add a small delay between attacks on different parts to avoid spamming  
+                                    task.wait()   
+                                end  
+                            end  
+                        end  
+                    end  
+                end  
+            end  
+            RunService.Heartbeat:Wait()  
         end  
-        return  
-    end  
-
-    local myHRP = LP.Character and LP.Character.PrimaryPart  
-    if not myHRP then return end -- Cannot fight without a character  
-
-    local target = Targets[1]  
-    if not (target and target.Character and target.Character.PrimaryPart and target.Character.Humanoid and target.Character.Humanoid.Health > 0) then  
-        if target then  
-            -- Target is invalid, remove them and move to the next.  
-            print("Floxy Debug: Target invalid/dead, removing:", target.Name)  
-            removeTarget(target.Name)  
-        end  
-        return -- Wait for the next tick to process the next target  
-    end  
-
-    local distance = (myHRP.Position - target.Character.PrimaryPart.Position).Magnitude  
-    if distance > AURA_RANGE then  
-        print("Floxy Debug: Target", target.Name, "is out of range ("..tostring(math.floor(distance)).."/"..tostring(AURA_RANGE)..").")  
-        return -- Skip attack if target is too far  
-    end  
-
-    -- If we are here, we have a valid target in range. Time to attack.  
-    forceEquip(true)  
-    local weapon = LP.Character and LP.Character:FindFirstChildOfClass("Tool")  
-    if not weapon then  
-        warn("Floxy Debug: Failed to attack, weapon could not be equipped in time.")  
-        return  
-    end  
-    
-    -- Most common sword scripts use one of these two methods.  
-    -- Method 1: Fire a remote event (preferred)  
-    local attackRemote = weapon:FindFirstChild("Attack", true) -- Recursive find  
-    if attackRemote and attackRemote:IsA("RemoteEvent") then  
-        print("Floxy Debug: Firing 'Attack' remote on target:", target.Name)  
-        pcall(function()  
-            attackRemote:FireServer()  
-        end)  
-        return  
-    end  
-    
-    -- Method 2: Use Tool:Activate() (common fallback)  
-    print("Floxy Debug: No 'Attack' remote found. Trying weapon:Activate() on target:", target.Name)  
-    pcall(function()  
-        weapon:Activate()  
+        
+        -- Loop has finished  
+        CombatLoopConnection = nil  
+        sendMessage("Combat loop stopped.")  
+        print("Floxy System: Loop finished because no targets/aura is off.")  
     end)  
+
+    -- This starts the coroutine  
+    coroutine.resume(CombatLoopConnection)  
 end  
 
--- Starts the combat loop if it's not already running.  
-local function startCombatLoop()  
-    if CombatLoopConnection and CombatLoopConnection.Connected then  
-        print("Floxy Debug: Attempted to start loop, but it is already running.")  
+-- This function will now stop the loop by clearing targets and disabling aura,  
+-- which the 'while' loop condition will detect.  
+local function stopCombatLoop()  
+    if not CombatLoopConnection then  
+        print("Floxy System: Attempted to stop a loop that was not running.")  
         return  
     end  
     
-    if not LP.Character then   
-        sendMessage("Cannot start combat without a character.")  
-        return   
-    end  
-    
-    sendMessage("Combat loop started.")  
-    print("Floxy Debug: Combat loop successfully initiated.")  
-    CombatLoopConnection = RunService.Heartbeat:Connect(runCombatTick)  
+    AuraEnabled = false  
+    table.clear(Targets) -- This will cause the while loop to exit on its next check  
+    sendMessage("Stopping combat loop...")  
 end  
 
--- Adds a player to the target list.  
+-- The functions that the commands use remain the same, but now they control the new loop.  
 local function addTarget(playerName)  
     local player = findPlayer(playerName)  
     if player and player ~= LP and not table.find(Targets, player) then  
         table.insert(Targets, 1, player) -- Add to the front of the list  
         sendMessage("Target added: " .. player.Name)  
-        startCombatLoop() -- Automatically start the loop when a target is added  
+        startCombatLoop() -- Start the main loop if not already running  
     else  
         sendMessage("Could not find player or player is already a target: " .. playerName)  
     end  
 end  
 
--- Removes a player from the target list.  
 local function removeTarget(playerName)  
+    if playerName:lower() == "all" then  
+        if #Targets > 0 then  
+            table.clear(Targets)  
+            sendMessage("All targets removed.")  
+        else  
+            sendMessage("Target list is already empty.")  
+        end  
+        return  
+    end  
+
     local playerToRemove = findPlayer(playerName)  
     for i, target in ipairs(Targets) do  
         if target == playerToRemove then  
@@ -256,7 +285,10 @@ local function removeTarget(playerName)
             return  
         end  
     end  
-end-- ==================================  
+    sendMessage("Could not find " .. playerName .. " in the target list.")  
+end
+
+-- ==================================  
 -- ==      COMMANDS & CONTROLS     ==  
 -- ==================================  
 
