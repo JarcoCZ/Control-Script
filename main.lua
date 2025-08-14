@@ -459,7 +459,7 @@ local function onMessageReceived(messageData)
         end  
     end  
 
-    if command == "connect" then  
+    if command == "@" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
