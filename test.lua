@@ -104,106 +104,108 @@ local function teleportTo(character, destination)
 end  
 
 -- ==================================  
--- ==      NEW COMBAT LOGIC        ==  
+-- ==        COMBAT LOGIC          ==  
 -- ==================================  
 
-local CombatLoopActive = false  
+-- REVISED FUNCTIONS --  
+
+local function findWeapon()  
+    if not LP.Character then return nil end  
+    
+    -- First, check if a tool is already equipped  
+    local equippedTool = LP.Character:FindFirstChildOfClass("Tool")  
+    if equippedTool and equippedTool:FindFirstChild("Handle") then  
+        print("Floxy System: Found equipped weapon:", equippedTool.Name)  
+        return equippedTool  
+    end  
+
+    -- If not, check the backpack  
+    local backpack = LP:FindFirstChildOfClass("Backpack")  
+    if backpack then  
+        for _, tool in ipairs(backpack:GetChildren()) do  
+            if tool:IsA("Tool") and tool:FindFirstChild("Handle") then  
+                print("Floxy System: Found weapon in backpack:", tool.Name)  
+                return tool  
+            end  
+        end  
+    end  
+    
+    warn("Floxy System: No suitable weapon found in character or backpack.")  
+    return nil  
+end  
+
+local function forceEquip(equip)  
+    local weapon = findWeapon()  
+    if weapon and equip then  
+        if weapon.Parent ~= LP.Character then  
+            LP.Character.Humanoid:EquipTool(weapon)  
+            task.wait(0.2) -- Give time for the equip animation/process  
+            print("Floxy System: Equipped weapon.")  
+        end  
+    elseif not equip and LP.Character and LP.Character:FindFirstChildOfClass("Tool") then  
+        LP.Character.Humanoid:UnequipTools()  
+        print("Floxy System: Unequipped weapon.")  
+    end  
+end  
 
 local function startCombatLoop()  
-    if CombatLoopActive then return end  
-    CombatLoopActive = true  
+    if CombatLoopConnection and CombatLoopConnection.Connected then  
+        sendMessage("Combat loop already running.")  
+        return  
+    end  
 
-    task.spawn(function()  
-        local overlapParams = OverlapParams.new()  
-        overlapParams.FilterType = Enum.RaycastFilterType.Include  
+    sendMessage("Combat loop started.")  
+    print("Floxy Debug: Attempting to start combat loop...")  
 
-        while CombatLoopActive do  
-            local myChar = LP.Character  
-            if not (myChar and myChar.PrimaryPart) then  
-                RunService.Heartbeat:Wait()  
-                continue  
+    CombatLoopConnection = RunService.Heartbeat:Connect(function()  
+        if #Targets == 0 then  
+            -- No targets, so we stop the loop.  
+            if CombatLoopConnection and CombatLoopConnection.Connected then  
+                CombatLoopConnection:Disconnect()  
+                CombatLoopConnection = nil  
+                sendMessage("No targets left. Combat loop stopped.")  
+                print("Floxy Debug: Loop stopped, no targets.")  
             end  
+            return  
+        end  
 
-            local myHumanoid = myChar:FindFirstChildOfClass("Humanoid")  
-            if not (myHumanoid and myHumanoid.Health > 0) then  
-                RunService.Heartbeat:Wait()  
-                continue  
-            end  
+        local currentTarget = Targets[1]  
+        if not (currentTarget and currentTarget.Character and currentTarget.Character.PrimaryPart and currentTarget.Character.Humanoid and currentTarget.Character.Humanoid.Health > 0) then  
+            -- Target is invalid, dead, or has left. Remove them and try the next one.  
+            print("Floxy Debug: Current target is invalid or dead. Removing.")  
+            removeTarget(currentTarget.Name)  
+            return  
+        end  
 
-            local tool = myChar:FindFirstChildOfClass("Tool")  
-            if not (tool and tool:IsDescendantOf(Workspace)) then  
-                RunService.Heartbeat:Wait()  
-                continue  
-            end  
+        local myHRP = LP.Character and LP.Character.PrimaryPart  
+        if not myHRP then return end  
+        
+        local distance = (myHRP.Position - currentTarget.Character.PrimaryPart.Position).Magnitude  
+        if distance > AURA_RANGE then  
+            print("Floxy Debug: Target is out of range. Distance:", distance)  
+            return -- Skip attack if target is too far  
+        end  
 
-            local touchPart = tool:FindFirstChild("Handle") or tool:FindFirstChildWhichIsA("BasePart")  
-            if not touchPart then  
-                RunService.Heartbeat:Wait()  
-                continue  
-            end  
-
-            -- Build the list of potential targets  
-            local charactersToAttack = {}  
-            local finalTargets = {}  
-
-            -- Add manually looped players  
-            for _, targetName in ipairs(Targets) do  
-                local player = Players:FindFirstChild(targetName)  
-                if player and player.Character and not table.find(finalTargets, player) then  
-                    table.insert(finalTargets, player)  
-                end  
-            end  
-
-            -- Add aura players  
-            if AuraEnabled then  
-                for _, player in ipairs(PlayerList) do  
-                    if player ~= LP and player.Character and not table.find(Whitelist, player.Name) and not table.find(finalTargets, player) then  
-                        table.insert(finalTargets, player)  
-                    end  
-                end  
-            end  
-
-            if #finalTargets == 0 then  
-                RunService.Heartbeat:Wait()  
-                continue  
-            end  
-
-            -- Prepare OverlapParams with the final list of characters  
-            for _, player in ipairs(finalTargets) do  
-                if player.Character then  
-                    table.insert(charactersToAttack, player.Character)  
-                end  
-            end  
-
-            if #charactersToAttack == 0 then  
-                RunService.Heartbeat:Wait()  
-                continue  
-            end  
-            
-            overlapParams.FilterDescendantsInstances = charactersToAttack  
-            
-            -- Check for parts within the box  
-            local auraBoxSize = Vector3.new(Dist, Dist, Dist)  
-            local instancesInBox = Workspace:GetPartBoundsInBox(myChar.PrimaryPart.CFrame, touchPart.Size + auraBoxSize, overlapParams)  
-
-            local attackedCharacters = {}  
-            for _, part in ipairs(instancesInBox) do  
-                local char = part:FindFirstAncestorWhichIsA("Model")  
-                if char and not attackedCharacters[char] then  
-                    local humanoid = char:FindFirstChildOfClass("Humanoid")  
-                    if humanoid and humanoid.Health > 0 then  
-                        pcall(function() tool:Activate() end)  
-                        firetouchinterest(touchPart, part, 1)  
-                        firetouchinterest(touchPart, part, 0)  
-                        attackedCharacters[char] = true -- Prevent attacking the same character multiple times per frame  
-                    end  
-                end  
-            end  
-
-            RunService.Heartbeat:Wait()  
+        forceEquip(true)  
+        local weapon = LP.Character:FindFirstChildOfClass("Tool")  
+        if not weapon then  
+            warn("Floxy Debug: Weapon not equipped or found. Cannot attack.")  
+            return  
+        end  
+        
+        -- IMPORTANT: Verify this remote path and event name!  
+        local attackRemote = weapon:FindFirstChild("Attack", true) -- Searches recursively  
+        
+        if attackRemote and attackRemote:IsA("RemoteEvent") then  
+            print("Floxy Debug: Firing 'Attack' remote for target:", currentTarget.Name)  
+            pcall(attackRemote.FireServer, attackRemote) -- Safely fire the event  
+        else  
+            warn("Floxy Debug: Could not find 'Attack' RemoteEvent in weapon:", weapon.Name)  
+            -- As a fallback, try activating the tool. Some simple swords use this.  
+            weapon:Activate()  
         end  
     end)  
-end  
+end
 
 local function stopCombatLoop()  
     if #Targets == 0 and not AuraEnabled then  
