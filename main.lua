@@ -12,6 +12,10 @@ local AuraEnabled = false
 local Whitelist = {} -- Stores names of whitelisted players  
 local ForceEquipConnection = nil -- Manages the sword equipping loop  
 
+-- Connect System variables  
+local ConnectedUsers = {} -- Store all connected users (Player objects)  
+local MainConnector = nil -- Store the main connector (Player object)  
+
 -- Function to send message to chat  
 local function sendMessage(message)  
     -- This uses a task.spawn to avoid blocking and ensure chat service is ready.  
@@ -32,6 +36,11 @@ local function findPlayer(partialName)
         end  
     end  
     return nil  
+end  
+
+-- Check if a player is connected  
+local function isConnected(player)  
+    return table.find(ConnectedUsers, player) ~= nil  
 end  
 
 -- Force equip sword to LocalPlayer  
@@ -64,7 +73,6 @@ local function startForceEquip()
     if ForceEquipConnection then  
         ForceEquipConnection:Disconnect()  
     end  
-    -- Use RenderStepped for smoother equipping, often for visual effects  
     ForceEquipConnection = RunService.RenderStepped:Connect(forceEquip)  
 end  
 
@@ -228,16 +236,6 @@ local function handleDamage(toolPart, targetPlayer)
     end  
 end  
 
--- Continuous kill loop for a specific player (KL)  
--- Note: This 'KL' (Kill Loop) function from your original code appears to be  
--- an attempt to continuously hit a player. While the original `firetouchinterest`  
--- is used there, it's generally handled by the `HB` (Heartbeat) loop.  
--- For simplicity and effectiveness, I'm integrating the continuous hitting  
--- logic directly into the Heartbeat loop for targeted players,  
--- rather than spawning separate `KL` tasks for each.  
--- This prevents potential resource drain from many concurrent while loops.  
-
-
 -- Main Heartbeat loop for hitbox and aura  
 local mainHeartbeatConnection = nil  
 local function setupHeartbeatLoop()  
@@ -315,6 +313,22 @@ Players.PlayerRemoving:Connect(function(player)
     -- Also remove from targets and whitelist if player leaves  
     removeTarget(player.Name) -- This also handles stopping force equip if no targets remain  
     removeFromWhitelist(player.Name)  
+
+    -- Handle connection system if player leaves  
+    if MainConnector == player then  
+        MainConnector = nil  
+        table.clear(ConnectedUsers)  
+        sendMessage("Main connector left. Connect system reset.")  
+    else  
+        -- Remove from connected users if they leave  
+        for i, connectedUser in ipairs(ConnectedUsers) do  
+            if connectedUser == player then  
+                table.remove(ConnectedUsers, i)  
+                sendMessage("'" .. player.Name .. "' disconnected.")  
+                break  
+            end  
+        end  
+    end  
 end)  
 
 -- Initialize players list on script start  
@@ -364,12 +378,75 @@ TextChatService.MessageReceived:Connect(function(message)
     local player = Players:GetPlayerByUserId(speaker.UserId)  
     if not player then return end  
     
-    -- Only process commands from the LocalPlayer running the script  
-    if player ~= LP then return end  
-    
     local text = message.Text  
     local args = text:split(" ")  
     local command = args[1]:lower()  
+    
+    -- === Connect System Commands (accessible by anyone initially) ===  
+    if command == "connect" then  
+        if not MainConnector then  
+            MainConnector = player  
+            table.insert(ConnectedUsers, player)  
+            table.insert(Whitelist, player.Name) -- Auto-whitelist main connector  
+            sendMessage("'" .. player.Name .. "' is now the Main Connector. Type 'connect <playername>' to add others.")  
+        elseif player == MainConnector then  
+            -- Main connector can connect other users  
+            if args[2] then  
+                local targetPlayer = findPlayer(args[2])  
+                if targetPlayer then  
+                    if not isConnected(targetPlayer) then  
+                        table.insert(ConnectedUsers, targetPlayer)  
+                        sendMessage("Connected '" .. targetPlayer.Name .. "'. They can now use commands.")  
+                    else  
+                        sendMessage("'" .. targetPlayer.Name .. "' is already connected.")  
+                    end  
+                else  
+                    sendMessage("Player '" .. args[2] .. "' not found.")  
+                end  
+            else  
+                sendMessage("Usage: connect <playername> (Main Connector only to add others)")  
+            end  
+        else  
+            sendMessage("You are not the Main Connector. '" .. MainConnector.Name .. "' is currently the Main Connector.")  
+        end  
+        return -- Important: Don't let other commands process 'connect'  
+    end  
+    
+    -- === .unconnect command (only MainConnector can use) ===  
+    if command == ".unconnect" then  
+        if player == MainConnector then  
+            if args[2] then  
+                local targetPlayer = findPlayer(args[2])  
+                if targetPlayer then  
+                    if targetPlayer == MainConnector then  
+                        sendMessage("Cannot unconnect yourself (Main Connector). Use 'connect' again to reset.")  
+                    else  
+                        for i, connectedUser in ipairs(ConnectedUsers) do  
+                            if connectedUser == targetPlayer then  
+                                table.remove(ConnectedUsers, i)  
+                                sendMessage("Disconnected '" .. targetPlayer.Name .. "'. They can no longer use commands.")  
+                                return  
+                            end  
+                        end  
+                        sendMessage("'" .. targetPlayer.Name .. "' is not currently connected.")  
+                    end  
+                else  
+                    sendMessage("Player '" .. args[2] .. "' not found.")  
+                end  
+            else  
+                sendMessage("Usage: .unconnect <playername>")  
+            end  
+        else  
+            sendMessage("Only the Main Connector can use '.unconnect'.")  
+        end  
+        return -- Important: Don't let other commands process '.unconnect'  
+    end  
+
+    -- === Rest of the commands (only accessible by ConnectedUsers or MainConnector) ===  
+    if not isConnected(player) then  
+        sendMessage("You need to be connected to use commands. Type 'connect' to become the Main Connector.")  
+        return -- Stop processing if not connected  
+    end  
     
     if command == ".loop" then  
         if args[2] then  
@@ -423,4 +500,11 @@ TextChatService.MessageReceived:Connect(function(message)
 end)  
 
 -- Initial message on script execution  
-sendMessage("Script Loaded! Use .loop and .aura commands.")
+-- This will automatically make the first player to run it the Main Connector.  
+task.spawn(function()  
+    while not LP or not TextChatService.ChatInputBarConfiguration.TargetTextChannel do  
+        task.wait(0.1) -- Wait for LocalPlayer and chat channel  
+    end  
+    -- Initial prompt for the user who loaded the script  
+    sendMessage("Script Loaded! Type 'connect' to become the Main Connector and enable commands.")  
+end)
