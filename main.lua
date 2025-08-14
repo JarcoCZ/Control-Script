@@ -103,134 +103,242 @@ local function teleportTo(character, destination)
 end  
 
 -- ==================================  
--- ==      NEW COMBAT LOGIC        ==  
+-- ==        COMBAT LOGIC          ==  
 -- ==================================  
 
-local CombatLoopActive = false  
+-- This is the new combat system, integrated with the script's commands.  
+-- It uses a Heartbeat loop and firetouchinterest for combat.  
 
-local function startCombatLoop()  
-    if CombatLoopActive then return end  
-    CombatLoopActive = true  
+local Players = game:GetService("Players")  
+local RunService = game:GetService("RunService")  
 
-    task.spawn(function()  
-        local overlapParams = OverlapParams.new()  
-        overlapParams.FilterType = Enum.RaycastFilterType.Include  
+-- 'Targets' table is now managed by addTarget/removeTarget functions below.  
+-- 'AuraEnabled' is used to control the aura functionality.  
+local AuraEnabled = false   
+local CombatLoopConnection = nil  
+local AURA_RANGE = 70 -- You can adjust the aura distance here.  
 
-        while CombatLoopActive do  
-            local myChar = LP.Character  
-            if not (myChar and myChar.PrimaryPart) then  
-                RunService.Heartbeat:Wait()  
-                continue  
-            end  
+-- Helper variables from the new script  
+local KillLoopTracker = {} -- Tracks the secondary kill loop for each player  
+local FT_TIMES = 5 -- How many times to fire touch interest  
+local DMG_TIMES = 2 -- How many times to run the damage loop  
 
-            local myHumanoid = myChar:FindFirstChildOfClass("Humanoid")  
-            if not (myHumanoid and myHumanoid.Health > 0) then  
-                RunService.Heartbeat:Wait()  
-                continue  
-            end  
+-- This function creates a large, invisible part around the weapon handle  
+-- to detect nearby players.  
+local function createReachBox(tool)  
+	if tool:IsA("Tool") and tool:FindFirstChild("Handle") then  
+		local handle = tool.Handle  
+		if not handle:FindFirstChild("BoxReachPart") then  
+			local p = Instance.new("Part")  
+			p.Name = "BoxReachPart"  
+			p.Size = Vector3.new(AURA_RANGE, AURA_RANGE, AURA_RANGE) -- Box size matches aura range  
+			p.Transparency = 1  
+			p.CanCollide = false  
+			p.Massless = true  
+			p.Parent = handle  
+			local w = Instance.new("WeldConstraint")  
+			w.Part0 = handle  
+			w.Part1 = p  
+			w.Parent = p  
+		end  
+	end  
+end  
 
-            local tool = myChar:FindFirstChildOfClass("Tool")  
-            if not (tool and tool:IsDescendantOf(Workspace)) then  
-                RunService.Heartbeat:Wait()  
-                continue  
-            end  
+-- This function fires the touch event multiple times for consistency.  
+local function fireTouch(partA, partB)  
+    if typeof(firetouchinterest) ~= "function" then return end  
+	for _ = 1, FT_TIMES do  
+		firetouchinterest(partA, partB, 0)  
+		firetouchinterest(partA, partB, 1)  
+	end  
+end  
 
-            local touchPart = tool:FindFirstChild("Handle") or tool:FindFirstChildWhichIsA("BasePart")  
-            if not touchPart then  
-                RunService.Heartbeat:Wait()  
-                continue  
-            end  
-
-            -- Build the list of potential targets  
-            local charactersToAttack = {}  
-            local finalTargets = {}  
-
-            -- Add manually looped players  
-            for _, targetName in ipairs(Targets) do  
-                local player = Players:FindFirstChild(targetName)  
-                if player and player.Character and not table.find(finalTargets, player) then  
-                    table.insert(finalTargets, player)  
-                end  
-            end  
-
-            -- Add aura players  
-            if AuraEnabled then  
-                for _, player in ipairs(PlayerList) do  
-                    if player ~= LP and player.Character and not table.find(Whitelist, player.Name) and not table.find(finalTargets, player) then  
-                        table.insert(finalTargets, player)  
-                    end  
-                end  
-            end  
-
-            if #finalTargets == 0 then  
-                RunService.Heartbeat:Wait()  
-                continue  
-            end  
-
-            -- Prepare OverlapParams with the final list of characters  
-            for _, player in ipairs(finalTargets) do  
-                if player.Character then  
-                    table.insert(charactersToAttack, player.Character)  
-                end  
-            end  
-
-            if #charactersToAttack == 0 then  
-                RunService.Heartbeat:Wait()  
-                continue  
-            end  
+-- A secondary, aggressive loop that spams touch events on a single target.  
+local function startKillLoop(player, toolPart)  
+	if KillLoopTracker[player] then return end  
+	KillLoopTracker[player] = true  
+	  
+    coroutine.wrap(function()  
+        while KillLoopTracker[player] do  
+            local localCharacter = LP.Character  
+            local targetCharacter = player.Character  
+            if not (localCharacter and targetCharacter) then break end  
             
-            overlapParams.FilterDescendantsInstances = charactersToAttack  
+            local tool = localCharacter:FindFirstChildWhichIsA("Tool")  
+            local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")  
             
-            -- Check for parts within the box  
-            local auraBoxSize = Vector3.new(Dist, Dist, Dist)  
-            local instancesInBox = Workspace:GetPartBoundsInBox(myChar.PrimaryPart.CFrame, touchPart.Size + auraBoxSize, overlapParams)  
-
-            local attackedCharacters = {}  
-            for _, part in ipairs(instancesInBox) do  
-                local char = part:FindFirstAncestorWhichIsA("Model")  
-                if char and not attackedCharacters[char] then  
-                    local humanoid = char:FindFirstChildOfClass("Humanoid")  
-                    if humanoid and humanoid.Health > 0 then  
-                        pcall(function() tool:Activate() end)  
-                        firetouchinterest(touchPart, part, 1)  
-                        firetouchinterest(touchPart, part, 0)  
-                        attackedCharacters[char] = true -- Prevent attacking the same character multiple times per frame  
-                    end  
+            if not (tool and tool.Parent == localCharacter and toolPart.Parent and targetHumanoid and targetHumanoid.Health > 0) then break end  
+            
+            for _, part in ipairs(targetCharacter:GetDescendants()) do  
+                if part:IsA("BasePart") then  
+                    firetouchinterest(toolPart, part, 0)  
+                    firetouchinterest(toolPart, part, 1)  
                 end  
             end  
-
-            RunService.Heartbeat:Wait()  
+            task.wait() -- Yield to prevent freezing  
         end  
-    end)  
+        KillLoopTracker[player] = nil  
+    end)()  
 end  
 
-local function stopCombatLoop()  
-    if #Targets == 0 and not AuraEnabled then  
-        CombatLoopActive = false  
-    end  
+-- The main damage function, called on each valid target.  
+local function mainHit(toolPart, targetPlayer)  
+	local targetCharacter = targetPlayer.Character  
+	if not targetCharacter then return end  
+	  
+	local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")  
+	local hrp = targetCharacter:FindFirstChild("HumanoidRootPart")  
+	  
+	if not (humanoid and hrp and humanoid.Health > 0) then return end  
+	  
+	-- Activate the tool (e.g., swing the sword)  
+	pcall(function()  
+		toolPart.Parent:Activate()  
+	end)  
+	  
+	-- Fire touch interest on all parts of the target  
+	for _ = 1, DMG_TIMES do  
+		for _, part in ipairs(targetCharacter:GetDescendants()) do  
+			if part:IsA("BasePart") then  
+				fireTouch(toolPart, part)  
+			end  
+		end  
+	end  
+	  
+	-- Start the secondary aggressive loop  
+	startKillLoop(targetPlayer, toolPart)  
 end  
 
--- This function replaces the original onHeartbeat's combat section.  
--- The non-combat logic remains.  
+-- The main combat loop, connected to Heartbeat (runs every frame).  
 local function onHeartbeat()  
-    if not LP.Character or not LP.Character.PrimaryPart then return end  
-    local myPos = LP.Character.PrimaryPart.Position  
-    local myHumanoid = LP.Character:FindFirstChildOfClass("Humanoid")  
+	local character = LP.Character  
+	if not character then return end  
+	  
+	local hrp = character:FindFirstChild("HumanoidRootPart")  
+	if not hrp then return end  
+	  
+	-- Find all valid targets based on manual list and aura  
+	local validTargets = {}  
+	for _, player in ipairs(Targets) do  
+		if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then  
+			table.insert(validTargets, player)  
+		end  
+	end  
+	  
+	if AuraEnabled then  
+		for _, player in ipairs(Players:GetPlayers()) do  
+			if player ~= LP and not table.find(Targets, player) then  
+				if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then  
+                    local dist = (hrp.Position - player.Character.PrimaryPart.Position).Magnitude  
+                    if dist <= AURA_RANGE then  
+					    table.insert(validTargets, player)  
+                    end  
+				end  
+			end  
+		end  
+	end  
 
-    if FollowTarget and FollowTarget.Character and FollowTarget.Character.PrimaryPart and myHumanoid and not safeZoneConnection then  
-        local targetPos = FollowTarget.Character.PrimaryPart.Position  
-        if (targetPos - myPos).Magnitude > 5 then  
-            myHumanoid:MoveTo(targetPos)  
+    if #validTargets == 0 then return end  
+
+	-- Find our weapon and its reach part  
+	for _, tool in ipairs(character:GetDescendants()) do  
+		if tool:IsA("Tool") then  
+			local reachPart = tool:FindFirstChild("BoxReachPart") or tool:FindFirstChild("Handle")  
+			if reachPart then  
+				-- Attack all valid targets  
+				for _, targetPlayer in ipairs(validTargets) do  
+					mainHit(reachPart, targetPlayer)  
+				end  
+			end  
+		end  
+	end  
+end  
+
+-- Function to set up the reach boxes on any tools the player gets.  
+local function setupCharacter(character)  
+    if not character then return end  
+	for _, tool in ipairs(character:GetDescendants()) do  
+		createReachBox(tool)  
+	end  
+	character.ChildAdded:Connect(createReachBox)  
+end  
+
+-- Starts or stops the main Heartbeat loop.  
+local function setCombatLoop(shouldBeActive)  
+    if shouldBeActive and not CombatLoopConnection then  
+        -- Start the loop  
+        sendMessage("Combat loop started.")  
+        CombatLoopConnection = RunService.Heartbeat:Connect(onHeartbeat)  
+    elseif not shouldBeActive and CombatLoopConnection then  
+        -- Stop the loop  
+        CombatLoopConnection:Disconnect()  
+        CombatLoopConnection = nil  
+        -- Stop all secondary kill loops  
+        for player, _ in pairs(KillLoopTracker) do  
+            KillLoopTracker[player] = nil  
+        end  
+        sendMessage("Combat loop stopped.")  
+    end  
+end  
+
+-- Connect setup functions to player character events  
+LP.CharacterAdded:Connect(function(char)  
+    -- Wait for the character to load fully  
+    char:WaitForChild("HumanoidRootPart", 5)  
+    setupCharacter(char)  
+end)  
+
+-- Initial setup if character already exists  
+if LP.Character then  
+    setupCharacter(LP.Character)  
+end  
+
+-- COMMAND INTEGRATION --  
+
+local function addTarget(playerName)  
+    local player = findPlayer(playerName)  
+    if player and player ~= LP then  
+        if not table.find(Targets, player) then  
+            table.insert(Targets, 1, player)  
+            sendMessage("Target added: " .. player.Name)  
+            setCombatLoop(true) -- Ensure loop is active  
+        else  
+            sendMessage(player.Name .. " is already a target.")  
+        end  
+    else  
+        sendMessage("Could not find player: " .. playerName)  
+    end  
+end  
+
+local function removeTarget(playerName)  
+    if playerName:lower() == "all" then  
+        if #Targets > 0 then  
+            table.clear(Targets)  
+            sendMessage("All targets removed.")  
+        else  
+            sendMessage("Target list is already empty.")  
+        end  
+    else  
+        local playerToRemove = findPlayer(playerName)  
+        if not playerToRemove then  
+            sendMessage("Could not find " .. playerName .. " to remove.")  
+            return  
+        end  
+        for i, target in ipairs(Targets) do  
+            if target == playerToRemove then  
+                table.remove(Targets, i)  
+                KillLoopTracker[playerToRemove] = nil -- Stop the kill loop for this player  
+                sendMessage("Target removed: " .. playerToRemove.Name)  
+                break  
+            end  
         end  
     end  
     
-    if SpammingEnabled then  
-        local tool = LP.Character:FindFirstChildOfClass("Tool")  
-        if tool then pcall(function() tool:Activate() end) end  
+    -- If aura is off and no targets remain, stop the loop  
+    if not AuraEnabled and #Targets == 0 then  
+        setCombatLoop(false)  
     end  
-    
-    -- The old combat loop that was here has been completely replaced by the new system above.  
-end  
+end
 
 -- ==================================  
 -- ==      COMMANDS & CONTROLS     ==  
