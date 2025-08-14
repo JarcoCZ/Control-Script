@@ -1,10 +1,12 @@
 --[[  
-    Floxy Script - Fixed by luxx (v63 - Bang Command)  
+    Floxy Script - Fixed by luxx (v64 - Bang Command Rework)  
 
-    UPDATES (v63):  
-    - ADDED: `.bang [username]` command to teleport behind and strafe-attack a target.  
-    - ADDED: `.unbang` command to stop the bang loop.  
-    - CLEANED: This version is a direct update to v62, without the extra connection/auth features.  
+    UPDATES (v64):  
+    - REWORKED: The `.bang` command logic has been completely fixed.  
+    - The previous version's movement logic was flawed and is now replaced with  
+      a more reliable CFrame-based approach for the "strafe" effect.  
+    - The command now correctly teleports you behind the target and creates a rapid  
+      back-and-forth motion for the desired effect.  
 ]]  
 
 -- Services  
@@ -35,8 +37,8 @@ local safeZonePlatform = nil
 local spinConnection = nil  
 local spinTarget = nil  
 local AwaitingRejoinConfirmation = false  
-local BangTarget = nil          -- v63: For .bang command  
-local BangConnection = nil      -- v63: Connection for the bang loop  
+local BangTarget = nil          -- v64: For .bang command  
+local BangConnection = nil      -- v64: Connection for the bang loop  
 
 -- Pre-loaded Instances  
 local ChangeTimeEvent = nil  
@@ -192,14 +194,12 @@ end
 -- ==      COMMANDS & CONTROLS     ==  
 -- ==================================  
 
--- v63: Functions to control the bang loop  
+-- v64: Functions to control the bang loop (REWORKED)  
 local function stopBangLoop()  
     if BangConnection and BangConnection.Connected then  
         BangConnection:Disconnect()  
         BangConnection = nil  
         BangTarget = nil  
-        local myHumanoid = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")  
-        if myHumanoid then myHumanoid:Move(Vector3.new(0,0,0)) end -- Stop movement  
     end  
 end  
 
@@ -207,26 +207,30 @@ local function startBangLoop(targetPlayer)
     stopBangLoop() -- Stop any previous loop  
     BangTarget = targetPlayer  
     
+    local bangState = 0 -- Used to alternate position  
+    
     BangConnection = RunService.Heartbeat:Connect(function()  
         local myChar = LP.Character  
         local targetChar = BangTarget and BangTarget.Character  
         
-        if not (myChar and myChar.PrimaryPart and targetChar and targetChar.PrimaryPart and targetChar.Humanoid and targetChar.Humanoid.Health > 0) then  
+        if not (myChar and myChar.PrimaryPart and targetChar and targetChar:FindFirstChild("HumanoidRootPart") and targetChar.Humanoid and targetChar.Humanoid.Health > 0) then  
             sendMessage("Bang target lost. Disabling.")  
             stopBangLoop()  
             return  
         end  
         
-        local myHrp = myChar.PrimaryPart  
-        local targetHrp = targetChar.PrimaryPart  
+        local targetHrp = targetChar.HumanoidRootPart  
         
-        -- Teleport behind the target, looking at them  
-        local behindPos = targetHrp.CFrame * CFrame.new(0, 0, 3) -- A bit further back  
-        teleportTo(myChar, CFrame.new(behindPos.Position, targetHrp.Position))  
+        -- Alternate distance to create a "banging" or "strafe" effect  
+        local distance = (bangState % 2 == 0) and 3 or 3.5  
+        bangState = bangState + 1  
         
-        -- Rapid W/S movement (strafe)  
-        local moveDir = (tick() % 2 > 1) and myHrp.CFrame.LookVector or -myHrp.CFrame.LookVector  
-        myChar.Humanoid:Move(moveDir)  
+        -- Calculate the position behind the target  
+        local newPos = (targetHrp.CFrame * CFrame.new(0, 0, distance)).Position  
+        
+        -- Set our character's CFrame to be at that position, looking at the target's torso  
+        local lookAtPos = targetHrp.Position  
+        teleportTo(myChar, CFrame.new(newPos, lookAtPos))  
     end)  
     
     sendMessage("Banging " .. targetPlayer.Name)  
@@ -406,7 +410,7 @@ local function displayCommands()
 .kill [user], .loop [user|all], .unloop [user|all]  
 .aura [range|off], .aura [see|unsee], .aura whitelist [user], .aura unwhitelist [user]  
 .to [user], .follow [user], .unfollow, .spin [user], .unspin, .spinspeed [val]  
-.bang [user], .unbang -- v63: New Commands  
+.bang [user], .unbang  
 ]]  
     local commandList_2 = [[  
 .safe, .unsafe, .safezone [user], .unsafezone  
@@ -557,7 +561,7 @@ local function onMessageReceived(messageData)
     elseif command == ".unfollow" then  
         FollowTarget = nil  
         stopSafeZoneLoop()  
-    elseif command == ".cmds" or command == ".help" then -- Added .help as an alias  
+    elseif command == ".cmds" or command == ".help" then  
         displayCommands()  
     elseif command == ".count" then  
         local playerCount = #Players:GetPlayers()  
@@ -639,7 +643,7 @@ local function onMessageReceived(messageData)
         end)  
     elseif command == ".unsafezone" then  
         stopSafeZoneLoop()  
-    -- v63: Handle new bang commands  
+    -- v64: Handle new bang commands  
     elseif command == ".bang" and arg2 then  
         local targetPlayer = findPlayer(arg2)  
         if targetPlayer and targetPlayer ~= LP then  
@@ -659,7 +663,7 @@ end
 
 local function onCharacterAdded(char)  
     stopSafeZoneLoop()  
-    stopBangLoop() -- v63: Stop bang loop on death/respawn  
+    stopBangLoop() -- Stop bang loop on death/respawn  
     local humanoid = char:WaitForChild("Humanoid", 10)  
     if humanoid then  
         humanoid.Died:Connect(function() onCharacterDied(humanoid) end)  
@@ -701,7 +705,7 @@ if LP.Character then onCharacterAdded(LP.Character) end
 Players.PlayerAdded:Connect(function(p) table.insert(PlayerList, p) end)  
 Players.PlayerRemoving:Connect(function(p)  
     if spinTarget and spinTarget == p then stopSpinLoop() end  
-    if BangTarget and BangTarget == p then stopBangLoop() end -- v63: Stop if target leaves  
+    if BangTarget and BangTarget == p then stopBangLoop() end  
     removeTarget(p.Name)  
     for i, pl in ipairs(PlayerList) do if pl == p then table.remove(PlayerList, i); break end end  
     for i, u in ipairs(ConnectedUsers) do if u == p then table.remove(ConnectedUsers, i); break end end  
@@ -716,5 +720,5 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-sendMessage("Script Executed - Floxy (Fixed by luxx v63)")  
+sendMessage("Script Executed - Floxy (Fixed by luxx v64)")  
 print("Floxy System Loaded. User Authorized.")
