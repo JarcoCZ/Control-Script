@@ -107,135 +107,156 @@ end
 -- ==        COMBAT LOGIC          ==  
 -- ==================================  
 
--- REVISED FUNCTIONS --  
+local AuraEnabled = false  
+local CombatLoopConnection = nil  
+local AURA_RANGE = 25 -- Default distance for aura. Adjust if needed.  
 
+-- Function to find a usable weapon in the player's character or backpack.  
 local function findWeapon()  
     if not LP.Character then return nil end  
     
-    -- First, check if a tool is already equipped  
+    -- Priority 1: Check if a tool is already equipped.  
     local equippedTool = LP.Character:FindFirstChildOfClass("Tool")  
     if equippedTool and equippedTool:FindFirstChild("Handle") then  
-        print("Floxy System: Found equipped weapon:", equippedTool.Name)  
         return equippedTool  
     end  
 
-    -- If not, check the backpack  
+    -- Priority 2: Check the backpack for a suitable tool.  
     local backpack = LP:FindFirstChildOfClass("Backpack")  
     if backpack then  
+        -- Prefer a tool named "ClassicSword", but fall back to any valid tool.  
+        local sword = backpack:FindFirstChild("ClassicSword")  
+        if sword and sword:IsA("Tool") and sword:FindFirstChild("Handle") then  
+            return sword  
+        end  
         for _, tool in ipairs(backpack:GetChildren()) do  
             if tool:IsA("Tool") and tool:FindFirstChild("Handle") then  
-                print("Floxy System: Found weapon in backpack:", tool.Name)  
-                return tool  
+                return tool -- Return the first valid tool found.  
             end  
         end  
     end  
     
-    warn("Floxy System: No suitable weapon found in character or backpack.")  
-    return nil  
+    return nil -- No weapon found  
 end  
 
-local function forceEquip(equip)  
+-- Equips or unequips the best available weapon.  
+local function forceEquip(shouldEquip)  
     local weapon = findWeapon()  
-    if weapon and equip then  
-        if weapon.Parent ~= LP.Character then  
-            LP.Character.Humanoid:EquipTool(weapon)  
-            task.wait(0.2) -- Give time for the equip animation/process  
-            print("Floxy System: Equipped weapon.")  
-        end  
-    elseif not equip and LP.Character and LP.Character:FindFirstChildOfClass("Tool") then  
-        LP.Character.Humanoid:UnequipTools()  
-        print("Floxy System: Unequipped weapon.")  
+    if not weapon then   
+        warn("Floxy System: No weapon found to equip/unequip.")  
+        return   
+    end  
+
+    local humanoid = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")  
+    if not humanoid then return end  
+
+    if shouldEquip and weapon.Parent ~= LP.Character then  
+        humanoid:EquipTool(weapon)  
+        task.wait(0.1) -- Give a small delay for the tool to equip.  
+    elseif not shouldEquip and weapon.Parent == LP.Character then  
+        humanoid:UnequipTools()  
     end  
 end  
 
-local function startCombatLoop()  
-    if CombatLoopConnection and CombatLoopConnection.Connected then  
-        sendMessage("Combat loop already running.")  
+-- Main combat loop function, runs on every frame when active.  
+local function runCombatTick()  
+    -- Stop conditions for the loop  
+    if not AuraEnabled and #Targets == 0 then  
+        if CombatLoopConnection then  
+            CombatLoopConnection:Disconnect()  
+            CombatLoopConnection = nil  
+            forceEquip(false) -- Unequip weapon when combat ends  
+            sendMessage("Combat loop stopped.")  
+            print("Floxy Debug: Loop stopped (no targets and aura is off).")  
+        end  
         return  
     end  
 
-    sendMessage("Combat loop started.")  
-    print("Floxy Debug: Attempting to start combat loop...")  
+    local myHRP = LP.Character and LP.Character.PrimaryPart  
+    if not myHRP then return end -- Cannot fight without a character  
 
-    CombatLoopConnection = RunService.Heartbeat:Connect(function()  
-        if #Targets == 0 then  
-            -- No targets, so we stop the loop.  
-            if CombatLoopConnection and CombatLoopConnection.Connected then  
-                CombatLoopConnection:Disconnect()  
-                CombatLoopConnection = nil  
-                sendMessage("No targets left. Combat loop stopped.")  
-                print("Floxy Debug: Loop stopped, no targets.")  
-            end  
-            return  
+    local target = Targets[1]  
+    if not (target and target.Character and target.Character.PrimaryPart and target.Character.Humanoid and target.Character.Humanoid.Health > 0) then  
+        if target then  
+            -- Target is invalid, remove them and move to the next.  
+            print("Floxy Debug: Target invalid/dead, removing:", target.Name)  
+            removeTarget(target.Name)  
         end  
+        return -- Wait for the next tick to process the next target  
+    end  
 
-        local currentTarget = Targets[1]  
-        if not (currentTarget and currentTarget.Character and currentTarget.Character.PrimaryPart and currentTarget.Character.Humanoid and currentTarget.Character.Humanoid.Health > 0) then  
-            -- Target is invalid, dead, or has left. Remove them and try the next one.  
-            print("Floxy Debug: Current target is invalid or dead. Removing.")  
-            removeTarget(currentTarget.Name)  
-            return  
-        end  
+    local distance = (myHRP.Position - target.Character.PrimaryPart.Position).Magnitude  
+    if distance > AURA_RANGE then  
+        print("Floxy Debug: Target", target.Name, "is out of range ("..tostring(math.floor(distance)).."/"..tostring(AURA_RANGE)..").")  
+        return -- Skip attack if target is too far  
+    end  
 
-        local myHRP = LP.Character and LP.Character.PrimaryPart  
-        if not myHRP then return end  
-        
-        local distance = (myHRP.Position - currentTarget.Character.PrimaryPart.Position).Magnitude  
-        if distance > AURA_RANGE then  
-            print("Floxy Debug: Target is out of range. Distance:", distance)  
-            return -- Skip attack if target is too far  
-        end  
-
-        forceEquip(true)  
-        local weapon = LP.Character:FindFirstChildOfClass("Tool")  
-        if not weapon then  
-            warn("Floxy Debug: Weapon not equipped or found. Cannot attack.")  
-            return  
-        end  
-        
-        -- IMPORTANT: Verify this remote path and event name!  
-        local attackRemote = weapon:FindFirstChild("Attack", true) -- Searches recursively  
-        
-        if attackRemote and attackRemote:IsA("RemoteEvent") then  
-            print("Floxy Debug: Firing 'Attack' remote for target:", currentTarget.Name)  
-            pcall(attackRemote.FireServer, attackRemote) -- Safely fire the event  
-        else  
-            warn("Floxy Debug: Could not find 'Attack' RemoteEvent in weapon:", weapon.Name)  
-            -- As a fallback, try activating the tool. Some simple swords use this.  
-            weapon:Activate()  
-        end  
+    -- If we are here, we have a valid target in range. Time to attack.  
+    forceEquip(true)  
+    local weapon = LP.Character and LP.Character:FindFirstChildOfClass("Tool")  
+    if not weapon then  
+        warn("Floxy Debug: Failed to attack, weapon could not be equipped in time.")  
+        return  
+    end  
+    
+    -- Most common sword scripts use one of these two methods.  
+    -- Method 1: Fire a remote event (preferred)  
+    local attackRemote = weapon:FindFirstChild("Attack", true) -- Recursive find  
+    if attackRemote and attackRemote:IsA("RemoteEvent") then  
+        print("Floxy Debug: Firing 'Attack' remote on target:", target.Name)  
+        pcall(function()  
+            attackRemote:FireServer()  
+        end)  
+        return  
+    end  
+    
+    -- Method 2: Use Tool:Activate() (common fallback)  
+    print("Floxy Debug: No 'Attack' remote found. Trying weapon:Activate() on target:", target.Name)  
+    pcall(function()  
+        weapon:Activate()  
     end)  
-end
+end  
 
-local function stopCombatLoop()  
-    if #Targets == 0 and not AuraEnabled then  
-        CombatLoopActive = false  
+-- Starts the combat loop if it's not already running.  
+local function startCombatLoop()  
+    if CombatLoopConnection and CombatLoopConnection.Connected then  
+        print("Floxy Debug: Attempted to start loop, but it is already running.")  
+        return  
+    end  
+    
+    if not LP.Character then   
+        sendMessage("Cannot start combat without a character.")  
+        return   
+    end  
+    
+    sendMessage("Combat loop started.")  
+    print("Floxy Debug: Combat loop successfully initiated.")  
+    CombatLoopConnection = RunService.Heartbeat:Connect(runCombatTick)  
+end  
+
+-- Adds a player to the target list.  
+local function addTarget(playerName)  
+    local player = findPlayer(playerName)  
+    if player and player ~= LP and not table.find(Targets, player) then  
+        table.insert(Targets, 1, player) -- Add to the front of the list  
+        sendMessage("Target added: " .. player.Name)  
+        startCombatLoop() -- Automatically start the loop when a target is added  
+    else  
+        sendMessage("Could not find player or player is already a target: " .. playerName)  
     end  
 end  
 
--- This function replaces the original onHeartbeat's combat section.  
--- The non-combat logic remains.  
-local function onHeartbeat()  
-    if not LP.Character or not LP.Character.PrimaryPart then return end  
-    local myPos = LP.Character.PrimaryPart.Position  
-    local myHumanoid = LP.Character:FindFirstChildOfClass("Humanoid")  
-
-    if FollowTarget and FollowTarget.Character and FollowTarget.Character.PrimaryPart and myHumanoid and not safeZoneConnection then  
-        local targetPos = FollowTarget.Character.PrimaryPart.Position  
-        if (targetPos - myPos).Magnitude > 5 then  
-            myHumanoid:MoveTo(targetPos)  
+-- Removes a player from the target list.  
+local function removeTarget(playerName)  
+    local playerToRemove = findPlayer(playerName)  
+    for i, target in ipairs(Targets) do  
+        if target == playerToRemove then  
+            table.remove(Targets, i)  
+            sendMessage("Target removed: " .. playerName)  
+            return  
         end  
     end  
-    
-    if SpammingEnabled then  
-        local tool = LP.Character:FindFirstChildOfClass("Tool")  
-        if tool then pcall(function() tool:Activate() end) end  
-    end  
-    
-    -- The old combat loop that was here has been completely replaced by the new system above.  
-end  
-
--- ==================================  
+end-- ==================================  
 -- ==      COMMANDS & CONTROLS     ==  
 -- ==================================  
 
