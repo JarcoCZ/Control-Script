@@ -255,14 +255,29 @@ local function stopCombatLoop()
 end  
 
 -- The functions that the commands use remain the same, but now they control the new loop.  
+-- ==================================  
+-- ==   REPLACEMENT COMBAT LOGIC   ==  
+-- ==================================  
+
+-- Replace the existing addTarget and removeTarget with these.  
+
 local function addTarget(playerName)  
-    local player = findPlayer(playerName)  
-    if player and player ~= LP and not table.find(Targets, player) then  
-        table.insert(Targets, 1, player) -- Add to the front of the list  
-        sendMessage("Target added: " .. player.Name)  
-        startCombatLoop() -- Start the main loop if not already running  
+    local player = findPlayer(playerName) -- Using the corrected findPlayer function is key  
+    
+    if player and player ~= LP then  
+        if not table.find(Targets, player) then  
+            table.insert(Targets, 1, player) -- Add to the front of the list  
+            sendMessage("Target added: " .. player.Name)  
+            startCombatLoop() -- Start the main loop if not already running  
+        else  
+            sendMessage(player.Name .. " is already a target.")  
+        end  
     else  
-        sendMessage("Could not find player or player is already a target: " .. playerName)  
+        if player == LP then  
+            sendMessage("You cannot target yourself.")  
+        else  
+            sendMessage("Could not find player: " .. playerName)  
+        end  
     end  
 end  
 
@@ -277,15 +292,31 @@ local function removeTarget(playerName)
         return  
     end  
 
-    local playerToRemove = findPlayer(playerName)  
+    local playerToRemove = findPlayer(playerName) -- Using the corrected findPlayer function  
+    
+    if not playerToRemove then  
+        sendMessage("Could not find " .. playerName .. " to remove.")  
+        return  
+    end  
+
     for i, target in ipairs(Targets) do  
         if target == playerToRemove then  
             table.remove(Targets, i)  
-            sendMessage("Target removed: " .. playerName)  
+            sendMessage("Target removed: " .. playerToRemove.Name)  
             return  
         end  
     end  
-    sendMessage("Could not find " .. playerName .. " in the target list.")  
+    
+    sendMessage(playerToRemove.Name .. " was not in the target list.")  
+end
+local playerToRemove = findPlayer(playerName)  
+for i, target in ipairs(Targets) do  
+    if target == playerToRemove then  
+        table.remove(Targets, i)  
+        sendMessage("Target removed: " .. playerName)  
+        return  
+    end  
+    sendMessage("Could not find " .. playerName .. " in the target list.")
 end
 
 -- ==================================  
