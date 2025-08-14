@@ -1,10 +1,11 @@
 --[[  
-    Floxy Script - Fully Corrected & Stabilized by luxx (v60 - Optimized & Pre-Respawn Attack - Silent)  
+    Floxy Script - Fully Corrected & Stabilized by luxx (v60 - Optimized & Pre-Respawn Attack - Silent - Faster Auto-Equip)  
 
-    UPDATES (v60 - Optimized & Pre-Respawn Attack - Silent - True Pre-Respawn Fix):  
-    - Implemented a more aggressive "pre-respawn" attack by attempting to attack immediately when `CharacterAdded` fires for a targeted player, minimizing `task.wait()` before `manualAttack`.  
-    - Removed the `PlayersAboutToRespawn` flag and associated logic as it was not achieving a true pre-respawn attack.  
-    - Simplified the `onCharacterAdded` logic for targeted players to directly trigger `manualAttack`.  
+    UPDATES (v60 - Optimized & Pre-Respawn Attack - Silent - Faster Auto-Equip):  
+    - Removed the separate `forceEquip` function and its associated `ForceEquipConnection`.  
+    - Integrated tool equip logic directly into the `onHeartbeat` loop. This ensures that:  
+        - If targets are present or Aura is enabled, the script continuously attempts to keep a tool equipped from the backpack.  
+        - This provides a much faster and more responsive auto-equip, especially after respawns or if the game unequips the tool.  
     - All debug messages (print, warn) and script execution confirmation messages remain removed for silent operation.  
     - FT_TIMES and DMG_TIMES constants remain reduced for faster hit registration.  
     - ManualAttack and onCharacterAdded `task.wait()` calls remain shortened for quicker response.  
@@ -30,10 +31,9 @@ local Targets = {}
 local Whitelist = {}  
 local ConnectedUsers = {}  
 local DeathPositions = {}  
--- Removed: local PlayersAboutToRespawn = {} -- Track players who are about to respawn  
 local FollowTarget = nil  
 local MainConnector = nil  
-local ForceEquipConnection = nil  
+-- Removed: local ForceEquipConnection = nil  
 local HeartbeatConnection = nil  
 local SpammingEnabled = false  
 local safePlatform = nil  
@@ -83,7 +83,7 @@ local function sendMessage(message)
     pcall(function()  
         TextChatService.ChatInputBarConfiguration.TargetTextChannel:SendAsync(message)  
     end)  
-end  
+}  
 
 local function findPlayer(partialName)  
     if not partialName then return nil end  
@@ -207,6 +207,15 @@ local function onHeartbeat()
     local myPos = LP.Character.PrimaryPart.Position  
     local myHumanoid = LP.Character:FindFirstChildOfClass("Humanoid")  
 
+    -- Faster Auto-Equip Logic  
+    if (#Targets > 0 or AuraEnabled) and myHumanoid then  
+        local equippedTool = LP.Character:FindFirstChildWhichIsA("Tool")  
+        local backpackTool = LP.Backpack:FindFirstChildWhichIsA("Tool")  
+        if not equippedTool and backpackTool then  
+            myHumanoid:EquipTool(backpackTool)  
+        end  
+    end  
+
     if FollowTarget and FollowTarget.Character and FollowTarget.Character.PrimaryPart and myHumanoid and not safeZoneConnection then  
         local targetPos = FollowTarget.Character.PrimaryPart.Position  
         if (targetPos - myPos).Magnitude > 5 then  
@@ -281,7 +290,7 @@ local function stopSpinLoop()
         spinConnection = nil  
         spinTarget = nil  
     end  
-end  
+}  
 
 local function stopSafeZoneLoop()  
     if safeZoneConnection and safeZoneConnection.Connected then  
@@ -293,32 +302,33 @@ local function stopSafeZoneLoop()
         safeZonePlatform = nil  
     end  
     FollowTarget = nil  
-end  
+}  
 
-local function forceEquip(shouldEquip)  
-    if shouldEquip then  
-        if not ForceEquipConnection then  
-            ForceEquipConnection = RunService.Heartbeat:Connect(function()  
-                if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
-                    local sword = LP.Backpack:FindFirstChildWhichIsA("Tool") or LP.Character:FindFirstChildWhichIsA("Tool")  
-                    if sword and not LP.Character:FindFirstChild(sword.Name) then  
-                        LP.Character.Humanoid:EquipTool(sword)  
-                    end  
-                end  
-            end)  
-        end  
-    else  
-        if ForceEquipConnection then  
-            ForceEquipConnection:Disconnect()  
-            ForceEquipConnection = nil  
-        end  
-    end  
-end  
+-- Removed the forceEquip function as its logic is now in onHeartbeat  
+-- local function forceEquip(shouldEquip)  
+--     if shouldEquip then  
+--         if not ForceEquipConnection then  
+--             ForceEquipConnection = RunService.Heartbeat:Connect(function()  
+--                 if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
+--                     local sword = LP.Backpack:FindFirstChildWhichIsA("Tool") or LP.Character:FindFirstChildWhichIsA("Tool")  
+--                     if sword and not LP.Character:FindFirstChild(sword.Name) then  
+--                         LP.Character.Humanoid:EquipTool(sword)  
+--                     end  
+--                 end  
+--             end)  
+--         end  
+--     else  
+--         if ForceEquipConnection then  
+--             ForceEquipConnection:Disconnect()  
+--             ForceEquipConnection = nil  
+--         end  
+--     end  
+-- end  
 
 local function addTarget(playerName)  
     local player = findPlayer(playerName)  
     if player and player ~= LP and not table.find(Targets, player.Name) then  
-        table.insert(Targets, player.Name); forceEquip(true)  
+        table.insert(Targets, player.Name); -- Removed forceEquip(true) here  
     end  
 end  
 
@@ -328,7 +338,7 @@ local function removeTarget(playerName)
         for i, name in ipairs(Targets) do  
             if name == player.Name then table.remove(Targets, i); break end  
         end  
-        if #Targets == 0 and not AuraEnabled then forceEquip(false) end  
+        -- Removed forceEquip(false) here, as equip logic is now handled by heartbeat based on #Targets and AuraEnabled  
     end  
 end  
 
@@ -376,7 +386,7 @@ local function setAura(range)
     if newRange and newRange >= 0 then  
         Dist = newRange  
         AuraEnabled = newRange > 0  
-        forceEquip(AuraEnabled or #Targets > 0)  
+        -- Removed forceEquip here, as equip logic is now handled by heartbeat based on #Targets and AuraEnabled  
         
         if LP.Character then  
             for _, tool in ipairs(LP.Character:GetChildren()) do   
@@ -488,7 +498,7 @@ local function onMessageReceived(messageData)
     elseif command == ".unloop" and arg2 then  
         if arg2:lower() == "all" then  
             table.clear(Targets)  
-            forceEquip(AuraEnabled)  
+            -- Removed forceEquip(AuraEnabled) here  
         else  
             removeTarget(arg2)  
         end  
@@ -641,17 +651,15 @@ local function onCharacterAdded(char)
     
     local player = Players:GetPlayerFromCharacter(char)  
     if player and table.find(Targets, player.Name) then   
-        -- Attempt to attack immediately, with minimal delay for character parts to load  
-        -- This is the "pre-respawn" aspect - attacking as soon as the character object exists,  
-        -- rather than waiting for it to be fully rendered or for HumanoidRootPart to be ready.  
-        task.wait(0.01) -- Minimal delay  
+        task.wait(0.01)   
         manualAttack(player)  
     end  
 
     for _, item in ipairs(char:GetChildren()) do createReachPart(item) end  
     char.ChildAdded:Connect(createReachPart)  
     
-    if #Targets > 0 or AuraEnabled then forceEquip(true) end  
+    -- Removed this check here as auto-equip is now in heartbeat  
+    -- if #Targets > 0 or AuraEnabled then forceEquip(true) end  
     
     if DeathPositions[LP.Name] then  
         local hrp = char:WaitForChild("HumanoidRootPart", 10)  
@@ -681,8 +689,6 @@ Players.PlayerAdded:Connect(function(player)
     end  
 end)  
 Players.PlayerRemoving:Connect(function(p)  
-    -- Removed: PlayersAboutToRespawn[p.Name] = true  
-
     if spinTarget and spinTarget == p then stopSpinLoop() end  
     removeTarget(p.Name)  
     for i, pl in ipairs(PlayerList) do if pl == p then table.remove(PlayerList, i); break end end  
@@ -703,4 +709,4 @@ if LP.Character then
 end  
 LP.CharacterAdded:Connect(onCharacterAdded)
 
-sendMessage("v61")
+sendMessage("v62")
