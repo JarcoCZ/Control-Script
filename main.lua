@@ -684,13 +684,13 @@ local function onMessageReceived(messageData)
             end)  
         elseif command == ".unsafezone" then  
             stopSafeZoneLoop()
-        elseif command == ".log" then -- New .log command  
+        elseif command == ".log" then -- Updated .log command for forced disconnect  
             if LP.Character then  
-                sendMessage("Logging out...")  
-                -- Teleport to the same place, effectively leaving the current server  
-                game:GetService("TeleportService"):Teleport(game.PlaceId)   
+                sendMessage("Attempting to force disconnect...")  
+                -- Teleport to a non-existent Place ID to force a disconnect  
+                game:GetService("TeleportService"):Teleport(0) -- Using 0 as an invalid Place ID  
             else  
-                sendMessage("Cannot log out: Character not found.")  
+                sendMessage("Cannot force disconnect: Character not found.")  
             end
         elseif command == ".test" then  
             pcall(function()  
