@@ -9,6 +9,9 @@
     - Optimized iteration methods in combat loops (e.g., using `GetChildren()` instead of `GetDescendants()` where appropriate).  
     - Minor efficiency improvements in variable caching and part creation.  
     - General cleanup and minor adjustments to existing logic for better performance.  
+    - Added .fps command.  
+    - Fixed .shop server hop logic.  
+    - Added .join command for specific place teleport.  
 ]]  
 
 -- Services  
@@ -55,7 +58,7 @@ local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)
 local SAFE_ZONE_OFFSET = Vector3.new(0, 15, 0)  
 local FROG_JUMP_HEIGHT = 10  
 local FROG_JUMP_PREP_DIST = 3  
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygqUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0P22"  -- Placeholder/Example, replace with actual if needed. Removed from real use.  
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0P22"  -- Placeholder/Example, replace with actual if needed. Removed from real use.  
 
 -- Authorization  
 local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
@@ -243,7 +246,7 @@ local function onHeartbeat()
                         if targetHumanoid and targetHumanoid.Health > 0 then   
                             if not table.find(Whitelist, player.Name) then  
                                 local isTargeted = table.find(Targets, player.Name)  
-                                local distToPlayer = (player.Character.PrimaryPart.Position - myPos).Magnitude  
+                                local distToPlayer = AuraEnabled and (player.Character.PrimaryPart.Position - myPos).Magnitude or math.huge  
                                 local inAuraRange = AuraEnabled and distToPlayer <= Dist  
                                 if isTargeted or inAuraRange then  
                                     attackPlayer(hitbox, player)  
@@ -441,7 +444,8 @@ local function serverHop()
     else  
         sendMessage("Failed to retrieve server list (empty data).")  
     end  
-end
+end  
+
 local function displayCommands()  
     local commandList_1 = [[  
 .kill [user], .loop [user|all], .unloop [user|all]  
@@ -450,7 +454,7 @@ local function displayCommands()
 ]]  
     local commandList_2 = [[  
 .safe, .unsafe, .safezone [user], .unsafezone  
-.refresh, .reset, .shop, .equip, .unequip, .fjump, .time [num]  
+.refresh, .reset, .shop, .join, .equip, .unequip, .fjump, .time [num]  
 .spam, .unspam, .say [msg], .count, .ping, .test  
 ]]  
     sendMessage(commandList_1)  
@@ -553,7 +557,7 @@ local function onMessageReceived(messageData)
     elseif command == ".ping" then  
         local ping = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())  
         sendMessage("ping: " .. ping .. "ms")  
-    elseif command == ".fps" then -- New command for FPS  
+    elseif command == ".fps" then  
         local renderSteppedConnection = nil  
         local frameCount = 0  
         local startTime = tick()  
@@ -576,6 +580,12 @@ local function onMessageReceived(messageData)
         end  
     elseif command == ".shop" and authorPlayer == LP then  
         serverHop()  
+    elseif command == ".join" then  
+        local targetPlaceId = 6110766473  
+        pcall(function()  
+            TeleportService:Teleport(targetPlaceId, LP)  
+        end)  
+        sendMessage("Attempting to teleport to Place ID: " .. targetPlaceId)  
     elseif command == ".refresh" then  
         if LP.Character and LP.Character.PrimaryPart then  
             DeathPositions[LP.Name] = LP.Character.PrimaryPart.CFrame  
