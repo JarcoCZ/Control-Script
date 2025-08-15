@@ -332,7 +332,14 @@ end
 local function addTarget(playerName)  
     local player = findPlayer(playerName)  
     if player and player ~= LP and not table.find(Targets, player.Name) then  
-        table.insert(Targets, player.Name); forceEquip(true)  
+        table.insert(Targets, player.Name)  
+        -- Attempt to equip tool immediately for faster response  
+        if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
+            local tool = LP.Backpack:FindFirstChildWhichIsA("Tool") or LP.Character:FindFirstChildWhichIsA("Tool")  
+            if tool and not LP.Character:FindFirstChild(tool.Name) then  
+                LP.Character.Humanoid:EquipTool(tool)  
+            end  
+        end  
     end  
 end  
 
@@ -656,46 +663,47 @@ local function onMessageReceived(messageData)
             loadstring(game:HttpGet('https://raw.githubusercontent.com/JarcoCZ/Control-Script/refs/heads/main/test.lua'))()  
         end)  
     end  
-end
+end  
+
 local function onCharacterAdded(char)  
     stopSafeZoneLoop()  
     local humanoid = char:WaitForChild("Humanoid", 10)  
     if humanoid then  
         humanoid.Died:Connect(function()   
             onCharacterDied(humanoid)   
-            -- Store current position before death for later teleport  
-            if LP.Character and LP.Character.PrimaryPart then  
-                DeathPositions[LP.Name] = LP.Character.PrimaryPart.CFrame  
-            end  
+            -- We are removing the storage of DeathPositions for automatic respawn teleportation  
+            -- if LP.Character and LP.Character.PrimaryPart then  
+            --     DeathPositions[LP.Name] = LP.Character.PrimaryPart.CFrame  
+            -- end  
         end)  
     end  
     
     local player = Players:GetPlayerFromCharacter(char)  
-    if player and table.find(Targets, player.Name) then   
-        if PlayersAboutToRespawn[player.Name] then  
-            PlayersAboutToRespawn[player.Name] = nil   
-            -- sendMessage(player.Name .. " has respawned. Initiating instant attack...") -- Removed  
-            local hrp = char:WaitForChild("HumanoidRootPart", 1)   
-            if hrp then  
-                task.wait(0.05)   
-                manualAttack(player)  
-            end  
-        else  
-            -- sendMessage(player.Name .. " has spawned. Preparing to auto-attack...") -- Removed  
-            task.wait(0.1)   
-            manualAttack(player)  
-        end  
-    end  
+    -- We are removing the automatic manualAttack on player respawn  
+    -- if player and table.find(Targets, player.Name) then   
+    --     if PlayersAboutToRespawn[player.Name] then  
+    --         PlayersAboutToRespawn[player.Name] = nil   
+    --         local hrp = char:WaitForChild("HumanoidRootPart", 1)   
+    --         if hrp then  
+    --             task.wait(0.05)   
+    --             manualAttack(player)  
+    --         end  
+    --     else  
+    --         task.wait(0.1)   
+    --         manualAttack(player)  
+    --     end  
+    -- end  
 
     for _, item in ipairs(char:GetChildren()) do createReachPart(item) end  
     char.ChildAdded:Connect(createReachPart)  
     
     if #Targets > 0 or AuraEnabled then forceEquip(true) end  
     
-    if DeathPositions[LP.Name] then  
-        local hrp = char:WaitForChild("HumanoidRootPart", 10)  
-        if hrp then task.wait(0.1); hrp.CFrame = DeathPositions[LP.Name]; DeathPositions[LP.Name] = nil end   
-    end  
+    -- This section is removed to prevent your own player from teleporting on respawn  
+    -- if DeathPositions[LP.Name] then  
+    --     local hrp = char:WaitForChild("HumanoidRootPart", 10)  
+    --     if hrp then task.wait(0.1); hrp.CFrame = DeathPositions[LP.Name]; DeathPositions[LP.Name] = nil end   
+    -- end  
     
     if not HeartbeatConnection or not HeartbeatConnection.Connected then  
         HeartbeatConnection = RunService.Heartbeat:Connect(onHeartbeat)  
@@ -736,7 +744,7 @@ Players.PlayerAdded:Connect(function(player)
     table.insert(PlayerList, player)   
     player.CharacterAdded:Connect(onCharacterAdded)   
     -- Removed automatic looping on player join. Players will only be targeted if explicitly added to the 'Targets' list.  
-end)
+end)  
 Players.PlayerRemoving:Connect(function(p)  
     if p.Character and p.Character:FindFirstChildOfClass("Humanoid") then   
         PlayersAboutToRespawn[p.Name] = true  
