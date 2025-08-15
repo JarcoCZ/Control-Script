@@ -59,6 +59,16 @@ local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzc
 
 -- Authorization  
 local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
+-- Automatically whitelisted users for Aura  
+local AutoWhitelistUsers = {  
+    "cubot_nova4",  
+    "Cub0t_01",  
+    "Cubot_Nova3",  
+    "FlexFightPro68",  
+    "FlexFightPro69",  
+    "defnotluxs",  
+    "e5c4qe"  
+}  
 
 -- ==================================  
 -- ==      HELPER FUNCTIONS        ==  
@@ -462,7 +472,7 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    if command == " " then  
+    if command == "v" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
@@ -694,6 +704,13 @@ end
 -- ==      INITIALIZATION          ==  
 -- ==================================  
 
+-- Add auto-whitelisted users to the Whitelist table  
+for _, username in ipairs(AutoWhitelistUsers) do  
+    if not table.find(Whitelist, username) then  
+        table.insert(Whitelist, username)  
+    end  
+end  
+
 task.spawn(function()  
     ChangeTimeEvent = ReplicatedStorage:WaitForChild("ChangeTime", 30)  
     -- if ChangeTimeEvent then  
@@ -747,5 +764,5 @@ task.spawn(function()
     end  
 end)  
 
-sendMessage(" ") -- Removed  
+sendMessage("v") -- Removed  
 -- print("Floxy System Loaded. User Authorized.") -- Removed
