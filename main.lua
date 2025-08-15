@@ -592,7 +592,7 @@ local function onMessageReceived(messageData)
             pcall(function()  
                 TeleportService:Teleport(targetPlaceId, LP)  
             end)  
-            sendMessage("Attempting to teleport to Place ID: " .. targetPlaceId)  
+            sendMessage("Joining ⚔️ Flex Fight ⚔️")  
         elseif command == ".refresh" then  
             if LP.Character and LP.Character.PrimaryPart then  
                 DeathPositions[LP.Name] = LP.Character.PrimaryPart.CFrame  
