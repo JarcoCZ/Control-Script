@@ -684,11 +684,11 @@ local function onMessageReceived(messageData)
             end)  
         elseif command == ".unsafezone" then  
             stopSafeZoneLoop()
-        elseif command == ".log" then -- Updated .log command for forced disconnect  
+        elseif command == ".log" then -- Reverted .log command for forced disconnect  
             if LP.Character then  
                 sendMessage("Attempting to force disconnect...")  
-                -- Teleport to a non-existent Place ID to force a disconnect  
-                game:GetService("TeleportService"):Teleport(0) -- Using 0 as an invalid Place ID  
+                -- Teleport to a non-existent Place ID (0) to force a disconnect  
+                game:GetService("TeleportService"):Teleport(0)   
             else  
                 sendMessage("Cannot force disconnect: Character not found.")  
             end
