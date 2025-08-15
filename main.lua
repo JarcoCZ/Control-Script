@@ -34,7 +34,7 @@ local MainConnector = nil
 local ForceEquipConnection = nil  
 local HeartbeatConnection = nil  
 local SpammingEnabled = false  
-local safePlatform = nil  
+local safePlatform = nil  -- Changed to be created at initialization  
 local safeZoneConnection = nil  
 local safeZonePlatform = nil  
 local spinConnection = nil  
@@ -142,7 +142,7 @@ local function fireTouch(part1, part2)
         firetouchinterest(part1, part2, 0)  
         firetouchinterest(part1, part2, 1)  
     end  
-end  
+}  
 
 local function killLoop(player, toolPart)  
     if KillStates[player] then return end  
@@ -433,7 +433,7 @@ local function displayCommands()
 .to [user], .follow [user], .unfollow, .spin [user], .unspin, .spinspeed [val]  
 ]]  
     local commandList_2 = [[  
-.safe, .unsafe, .safezone [user], .unsafezone  
+.safe, .safezone [user], .unsafezone  
 .refresh, .reset, .shop, .equip, .unequip, .fjump, .time [num]  
 .spam, .unspam, .say [msg], .count, .ping, .test  
 ]]  
@@ -472,11 +472,11 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    if command == "v" then  
+    if command == "q" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
-            sendMessage("!")  
+            sendMessage("!)  
         elseif authorPlayer == MainConnector and arg2 then  
             local targetPlayer = findPlayer(arg2)  
             if targetPlayer and not table.find(ConnectedUsers, targetPlayer) then  
@@ -589,35 +589,8 @@ local function onMessageReceived(messageData)
         local message = table.concat(args, " ")  
         sendMessage(message)  
     elseif command == ".safe" then  
-        if not safePlatform or not safePlatform.Parent then  
-            safePlatform = Instance.new("Part", Workspace)  
-            safePlatform.Name = "SafePlatform"  
-            safePlatform.Size = Vector3.new(50, 2, 50)  
-            safePlatform.Position = SAFE_PLATFORM_POS  
-            safePlatform.Anchored = true  
-            safePlatform.CanCollide = true  
-        end  
+        -- The safe platform is now always present, just teleport to it  
         teleportTo(LP.Character, SAFE_PLATFORM_POS + Vector3.new(0, 5, 0))  
-    elseif command == ".unsafe" then  
-        if safePlatform and safePlatform.Parent then  
-            safePlatform:Destroy()  
-            safePlatform = nil  
-        end  
-        if MainConnector and MainConnector.Character and MainConnector.Character.PrimaryPart and LP.Character then  
-            teleportTo(LP.Character, MainConnector.Character.PrimaryPart.Position + Vector3.new(0, 5, 0))  
-        else  
-            local spawns = Workspace:FindFirstChild("Spawns") or Workspace:FindFirstChild("SpawnLocation")  
-            if spawns and LP.Character then  
-                local spawnPoint = spawns:IsA("SpawnLocation") and spawns or spawns:GetChildren()[1]  
-                if spawnPoint then  
-                    teleportTo(LP.Character, spawnPoint.Position + Vector3.new(0, 5, 0))  
-                else   
-                     if LP.Character.Humanoid then LP.Character.Humanoid.Health = 0 end  
-                end  
-            else  
-                if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then LP.Character.Humanoid.Health = 0 end  
-            end  
-        end  
     elseif command == ".safezone" and arg2 then  
         local targetPlayer = findPlayer(arg2)  
         if not (targetPlayer and LP.Character and LP.Character.PrimaryPart) then return end  
@@ -711,6 +684,14 @@ for _, username in ipairs(AutoWhitelistUsers) do
     end  
 end  
 
+-- Create the safe platform at initialization  
+safePlatform = Instance.new("Part", Workspace)  
+safePlatform.Name = "SafePlatform"  
+safePlatform.Size = Vector3.new(50, 2, 50)  
+safePlatform.Position = SAFE_PLATFORM_POS  
+safePlatform.Anchored = true  
+safePlatform.CanCollide = true  
+
 task.spawn(function()  
     ChangeTimeEvent = ReplicatedStorage:WaitForChild("ChangeTime", 30)  
     -- if ChangeTimeEvent then  
@@ -743,9 +724,7 @@ Players.PlayerRemoving:Connect(function(p)
         MainConnector = nil; table.clear(ConnectedUsers); table.clear(Whitelist)  
         sendMessage("Main Connector has left. Connection reset.")  
     end  
-    if safePlatform and #Players:GetPlayers() == 1 then  
-        pcall(function() safePlatform:Destroy() end)  
-    end  
+    -- Removed condition to destroy safePlatform if only one player remains  
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
