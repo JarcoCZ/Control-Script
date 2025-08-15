@@ -735,10 +735,8 @@ for _, player in ipairs(Players:GetPlayers()) do table.insert(PlayerList, player
 Players.PlayerAdded:Connect(function(player)   
     table.insert(PlayerList, player)   
     player.CharacterAdded:Connect(onCharacterAdded)   
-    if player.Character then   
-        onCharacterAdded(player.Character)  
-    end  
-end)  
+    -- Removed automatic looping on player join. Players will only be targeted if explicitly added to the 'Targets' list.  
+end)
 Players.PlayerRemoving:Connect(function(p)  
     if p.Character and p.Character:FindFirstChildOfClass("Humanoid") then   
         PlayersAboutToRespawn[p.Name] = true  
