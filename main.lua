@@ -332,14 +332,7 @@ end
 local function addTarget(playerName)  
     local player = findPlayer(playerName)  
     if player and player ~= LP and not table.find(Targets, player.Name) then  
-        table.insert(Targets, player.Name)  
-        -- Attempt to equip tool immediately for faster response  
-        if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
-            local tool = LP.Backpack:FindFirstChildWhichIsA("Tool") or LP.Character:FindFirstChildWhichIsA("Tool")  
-            if tool and not LP.Character:FindFirstChild(tool.Name) then  
-                LP.Character.Humanoid:EquipTool(tool)  
-            end  
-        end  
+        table.insert(Targets, player.Name); forceEquip(true)  
     end  
 end
 
