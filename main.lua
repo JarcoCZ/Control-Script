@@ -46,7 +46,7 @@ local spinConnection = nil
 local spinTarget = nil  
 
 -- Bot specific variables (from your original bot script)  
-getgenv().HowFastDanSchneiderCatchesYou = 1 -- Roto Speed  
+getgenv().HowFastDanSchneiderCatchesYou = 3 -- Roto Speed  
 getgenv().HowMuchDanSchneiderTouchesYou = 15 -- Sword Ranga (used for fireTouch range in your bot, but Floxy uses Dist for Aura)  
 getgenv().HowMuchDanSchneiderTouchedYou = 10000 -- Attak Ranga (used for closest player search range)  
 getgenv().Daddy_Catches_You = false -- Main toggle for your bot's aiming/movement  
