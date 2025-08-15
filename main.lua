@@ -45,14 +45,20 @@ local safeZonePlatform = nil
 local spinConnection = nil  
 local spinTarget = nil  
 
+-- Bot specific variables (from your original bot script)  
+getgenv().HowFastDanSchneiderCatchesYou = 1 -- Roto Speed  
+getgenv().HowMuchDanSchneiderTouchesYou = 15 -- Sword Ranga (used for fireTouch range in your bot, but Floxy uses Dist for Aura)  
+getgenv().HowMuchDanSchneiderTouchedYou = 10000 -- Attak Ranga (used for closest player search range)  
+getgenv().Daddy_Catches_You = false -- Main toggle for your bot's aiming/movement  
+
 -- Pre-loaded Instances  
 local ChangeTimeEvent = nil  
 
 -- Configuration  
 local Dist = 0  
 local AuraEnabled = false  
-local DMG_TIMES = 1   
-local FT_TIMES = 3   
+local DMG_TIMES = 1  
+local FT_TIMES = 3  
 local SPIN_RADIUS = 7  
 local SPIN_SPEED = 10  
 local SPIN_HEIGHT_OFFSET = 5  
@@ -123,6 +129,42 @@ local function teleportTo(character, destination)
     end  
 end  
 
+-- Function to find the closest player for aiming/movement (from your bot script)  
+local function getClosestPlayer()  
+    local closestPlayer = nil  
+    local shortestDistance = getgenv().HowMuchDanSchneiderTouchedYou -- Use Attak Ranga for search range  
+
+    -- Ensure LocalPlayer's character exists  
+    if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then return nil end  
+
+    local localRootPart = LP.Character.HumanoidRootPart  
+
+    for _, v in pairs(Players:GetPlayers()) do  
+        if v.Name ~= LP.Name then -- Don't target self  
+            -- Check if player character exists, is alive, and has necessary parts  
+            if v.Character and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 and v.Character:FindFirstChild("HumanoidRootPart") and v.Character:FindFirstChild("Head") then  
+                if v.Character:FindFirstChildOfClass("ForceField") then  
+                    -- Player has a forcefield, skip them  
+                else  
+                    -- Cast a ray downwards from the target's HumanoidRootPart to check if they are on solid ground/part  
+                    local ray = Ray.new(v.Character:FindFirstChild("HumanoidRootPart").Position, Vector3.new(0,-100000,0))  
+                    local hitPart, hitPosition = game:GetService("Workspace"):FindPartOnRay(ray, v.Character)  
+
+                    if hitPart then -- If the ray hits something (player is grounded or near ground)  
+                        local magnitude = (v.Character.HumanoidRootPart.Position - localRootPart.Position).Magnitude  
+
+                        if magnitude < shortestDistance then  
+                            closestPlayer = v  
+                            shortestDistance = magnitude  
+                        end  
+                    end  
+                end  
+            end  
+        end  
+    end  
+    return closestPlayer  
+end  
+
 -- ==================================  
 -- ==      TOOL & COMBAT LOGIC     ==  
 -- ==================================  
@@ -131,13 +173,13 @@ local function createReachPart(tool)
     if tool:IsA("Tool") and tool:FindFirstChild("Handle") then  
         local handle = tool.Handle  
         if not handle:FindFirstChild("BoxReachPart") then  
-            local p = Instance.new("Part")   
+            local p = Instance.new("Part")  
             p.Name = "BoxReachPart"; p.Size = Vector3.new(Dist, Dist, Dist)  
             p.Transparency = 1; p.CanCollide = false; p.Massless = true  
-            p.Parent = handle   
-            local w = Instance.new("WeldConstraint")   
+            p.Parent = handle  
+            local w = Instance.new("WeldConstraint")  
             w.Part0, w.Part1 = handle, p  
-            w.Parent = p   
+            w.Parent = p  
         end  
     end  
 end  
@@ -154,21 +196,21 @@ local function killLoop(player, toolPart)
     KillStates[player] = true  
     task.spawn(function()  
         while KillStates[player] and player.Parent and LP.Character do  
-            local targetChar = player.Character;   
+            local targetChar = player.Character;  
             local myChar = LP.Character  
             local tool = toolPart.Parent  
-            
+
             if not (targetChar and targetChar:FindFirstChildOfClass("Humanoid") and targetChar.Humanoid.Health > 0 and myChar and tool and tool.Parent == myChar) then  
                 break  
             end  
-            
-            local targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid")   
-            if not targetHumanoid or targetHumanoid.Health <= 0 then break end   
 
-            for _, part in ipairs(targetChar:GetChildren()) do   
+            local targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid")  
+            if not targetHumanoid or targetHumanoid.Health <= 0 then break end  
+
+            for _, part in ipairs(targetChar:GetChildren()) do  
                 if part:IsA("BasePart") then fireTouch(toolPart, part) end  
             end  
-            task.wait()   
+            task.wait()  
         end  
         KillStates[player] = nil  
     end)  
@@ -178,10 +220,10 @@ local function attackPlayer(toolPart, player)
     local targetChar = player.Character  
     local targetHumanoid = targetChar and targetChar:FindFirstChildOfClass("Humanoid")  
     if not (targetHumanoid and targetHumanoid.Health > 0) then return end  
-    
+
     pcall(function() toolPart.Parent:Activate() end)  
     for _ = 1, DMG_TIMES do  
-        for _, part in ipairs(targetChar:GetChildren()) do   
+        for _, part in ipairs(targetChar:GetChildren()) do  
             if part:IsA("BasePart") then fireTouch(toolPart, part) end  
         end  
     end  
@@ -198,22 +240,22 @@ local function manualAttack(targetPlayer)
         local backpackTool = LP.Backpack:FindFirstChildWhichIsA("Tool")  
         if backpackTool then  
             backpackTool.Parent = character  
-            task.wait(0.1)   
+            task.wait(0.1)  
             tool = backpackTool  
         else  
             -- sendMessage("Auto-attack failed: No tool to equip.") -- Removed  
             return  
         end  
     end  
-    
+
     local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")  
     if not (targetHumanoid and targetHumanoid.Health > 0) then return end  
-    
+
     pcall(function() tool:Activate() end)  
-    for _ = 1, DMG_TIMES do   
-        for _, part in ipairs(targetCharacter:GetChildren()) do   
+    for _ = 1, DMG_TIMES do  
+        for _, part in ipairs(targetCharacter:GetChildren()) do  
             if part:IsA("BasePart") then  
-                fireTouch(tool.Handle, part)   
+                fireTouch(tool.Handle, part)  
             end  
         end  
     end  
@@ -232,20 +274,48 @@ local function onHeartbeat()
             myHumanoid:MoveTo(targetPos)  
         end  
     end  
-    
+
     if SpammingEnabled then  
         local tool = LP.Character:FindFirstChildOfClass("Tool")  
         if tool then pcall(function() tool:Activate() end) end  
     end  
 
-    for _, tool in ipairs(LP.Character:GetChildren()) do   
+    -- Integrated bot aiming and movement logic here  
+    if getgenv().Daddy_Catches_You == true then  
+        local targetPlayer = getClosestPlayer()  
+        if LP.Character and LP.Character.PrimaryPart and targetPlayer ~= nil then  
+            local TargetPart = targetPlayer.Character.HumanoidRootPart  
+            local Part = LP.Character.HumanoidRootPart  
+
+            LP.Character:FindFirstChildOfClass('Humanoid').AutoRotate = false  
+            Part.CFrame = Part.CFrame:Lerp(CFrame.new(Part.Position, TargetPart.Position) * CFrame.Angles(math.rad(0), math.rad(25), math.rad(0)), getgenv().HowFastDanSchneiderCatchesYou)  
+
+            LP.Character.Humanoid:MoveTo(targetPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(-3, 0, 0).p)  
+            if targetPlayer.Character.Humanoid:GetState() == Enum.HumanoidStateType.Freefall then  
+                LP.Character.Humanoid.Jump = true  
+            end  
+        else  
+            -- If bot is active but no target, or character issues, re-enable auto-rotate  
+            if LP.Character and LP.Character:FindFirstChildOfClass('Humanoid') then  
+                LP.Character:FindFirstChildOfClass('Humanoid').AutoRotate = true  
+            end  
+        end  
+    else  
+        -- If bot is not active, ensure auto-rotate is enabled  
+        if LP.Character and LP.Character:FindFirstChildOfClass('Humanoid') then  
+            LP.Character:FindFirstChildOfClass('Humanoid').AutoRotate = true  
+        end  
+    end  
+
+
+    for _, tool in ipairs(LP.Character:GetChildren()) do  
         if tool:IsA("Tool") then  
             local hitbox = tool:FindFirstChild("BoxReachPart") or tool:FindFirstChild("Handle")  
             if hitbox then  
                 for _, player in ipairs(PlayerList) do  
-                    if player ~= LP and player.Character then   
+                    if player ~= LP and player.Character then  
                         local targetHumanoid = player.Character:FindFirstChildOfClass("Humanoid")  
-                        if targetHumanoid and targetHumanoid.Health > 0 then   
+                        if targetHumanoid and targetHumanoid.Health > 0 then  
                             if not table.find(Whitelist, player.Name) then  
                                 local isTargeted = table.find(Targets, player.Name)  
                                 local distToPlayer = AuraEnabled and (player.Character.PrimaryPart.Position - myPos).Magnitude or math.huge  
@@ -269,7 +339,7 @@ end
 local function changeTime(count)  
     local num = tonumber(count)  
     if not num or num <= 0 then return end  
-    
+
     if not ChangeTimeEvent then  
         sendMessage("Error: Time event not loaded yet. Please wait a moment and try again.")  
         return  
@@ -284,13 +354,13 @@ end
 local function frogJump()  
     local myChar = LP.Character  
     if not (myChar and myChar.PrimaryPart) then return end  
-    
+
     local startPos = myChar.PrimaryPart.Position  
     local prepPos = startPos - Vector3.new(0, FROG_JUMP_PREP_DIST, 0)  
     local finalPos = startPos + Vector3.new(0, FROG_JUMP_HEIGHT, 0)  
-    
+
     teleportTo(myChar, prepPos)  
-    task.wait(0.01)   
+    task.wait(0.01)  
     teleportTo(myChar, finalPos)  
 end  
 
@@ -361,9 +431,9 @@ end
 local function killOnce(playerName)  
     local player = findPlayer(playerName)  
     if not player or not player.Character or not player.Character:FindFirstChild("Humanoid") then return end  
-    
+
     addTarget(playerName)  
-    
+
     local humanoid = player.Character:FindFirstChild("Humanoid")  
     local connection  
     connection = humanoid.Died:Connect(function()  
@@ -384,15 +454,15 @@ local function spinLoop()
             stopSpinLoop()  
             return  
         end  
-        
+
         local targetPos = spinTarget.Character.PrimaryPart.Position  
         local angle = tick() * SPIN_SPEED  
         local x = targetPos.X + SPIN_RADIUS * math.cos(angle)  
         local z = targetPos.Z + SPIN_RADIUS * math.sin(angle)  
-        
+
         local myNewPos = Vector3.new(x, targetPos.Y + SPIN_HEIGHT_OFFSET, z)  
         local lookAtPos = Vector3.new(targetPos.X, myNewPos.Y, targetPos.Z)  
-        
+
         teleportTo(LP.Character, CFrame.new(myNewPos, lookAtPos))  
     end)  
 end  
@@ -403,9 +473,9 @@ local function setAura(range)
         Dist = newRange  
         AuraEnabled = newRange > 0  
         forceEquip(AuraEnabled or #Targets > 0)  
-        
+
         if LP.Character then  
-            for _, tool in ipairs(LP.Character:GetChildren()) do   
+            for _, tool in ipairs(LP.Character:GetChildren()) do  
                 if tool:IsA("Tool") and tool:FindFirstChild("BoxReachPart") then  
                     tool.BoxReachPart.Size = Vector3.new(Dist, Dist, Dist)  
                 end  
@@ -434,7 +504,7 @@ local function serverHop()
                 table.insert(serverList, server.id)  
             end  
         end  
-        
+
         if #serverList > 0 then  
             local targetServerId = serverList[math.random(1, #serverList)]  
             -- Ensure that we are teleporting the local player to the correct place and instance.  
@@ -458,6 +528,7 @@ local function displayCommands()
 .safe, .unsafe, .safezone [user], .unsafezone  
 .refresh, .reset, .shop, .join, .equip, .unequip, .fjump, .time [num]  
 .spam, .unspam, .say [msg], .count, .ping, .test  
+.play, .stop (for sword fight bot)  
 ]]  
     sendMessage(commandList_1)  
     task.wait(0.5)  
@@ -474,7 +545,7 @@ local function onCharacterDied(humanoid)
     if killerTag and killerTag.Value then  
         killerName = killerTag.Value.Name  
     end  
-    
+
     local payload = {  
         content = "Player " .. LP.Name .. " died. Killed by: " .. killerName,  
         username = "Death Notifier"  
@@ -485,7 +556,7 @@ end
 local function onMessageReceived(messageData)  
     local text = messageData.Text  
     if not text or not messageData.TextSource then return end  
-    
+
     local authorPlayer = Players:GetPlayerByUserId(messageData.TextSource.UserId)  
     if not authorPlayer then return end  
 
@@ -647,7 +718,7 @@ local function onMessageReceived(messageData)
                     local spawnPoint = spawns:IsA("SpawnLocation") and spawns or spawns:GetChildren()[1]  
                     if spawnPoint then  
                         teleportTo(LP.Character, spawnPoint.Position + Vector3.new(0, 5, 0))  
-                    else   
+                    else  
                          if LP.Character.Humanoid then LP.Character.Humanoid.Health = 0 end  
                     end  
                 else  
@@ -659,14 +730,14 @@ local function onMessageReceived(messageData)
             if not (targetPlayer and LP.Character and LP.Character.PrimaryPart) then return end  
             stopSafeZoneLoop()  
             FollowTarget = targetPlayer  
-            
+
             safeZonePlatform = Instance.new("Part", Workspace)  
             safeZonePlatform.Name = "SafeZonePlatform"  
             safeZonePlatform.Size = Vector3.new(12, 2, 12)  
             safeZonePlatform.Transparency = 0.5  
             safeZonePlatform.Anchored = true  
             safeZonePlatform.CanCollide = true  
-            
+
             safeZoneConnection = RunService.Heartbeat:Connect(function()  
                 if not (FollowTarget and FollowTarget.Character and FollowTarget.Character.PrimaryPart and LP.Character and LP.Character.PrimaryPart and safeZonePlatform and safeZonePlatform.Parent) then  
                     sendMessage("Safezone target or self lost. Disabling.")  
@@ -677,25 +748,32 @@ local function onMessageReceived(messageData)
                 local targetPos = FollowTarget.Character.PrimaryPart.Position  
                 local platformNewPos = targetPos + SAFE_ZONE_OFFSET  
                 safeZonePlatform.Position = platformNewPos  
-                
+
                 local myHRP = LP.Character.PrimaryPart  
                 local myNewPos = platformNewPos + Vector3.new(0, (safeZonePlatform.Size.Y / 2) + (myHRP.Size.Y / 2), 0)  
                 teleportTo(LP.Character, CFrame.new(myNewPos) * (myHRP.CFrame - myHRP.CFrame.Position))  
             end)  
         elseif command == ".unsafezone" then  
-            stopSafeZoneLoop()
+            stopSafeZoneLoop()  
         elseif command == ".log" then -- Reverted .log command for forced disconnect  
             if LP.Character then  
                 sendMessage("Attempting to force disconnect...")  
                 -- Teleport to a non-existent Place ID (0) to force a disconnect  
-                game:GetService("TeleportService"):Teleport(0)   
+                game:GetService("TeleportService"):Teleport(0)  
             else  
                 sendMessage("Cannot force disconnect: Character not found.")  
-            end
+            end  
         elseif command == ".test" then  
             pcall(function()  
                 loadstring(game:HttpGet('https://raw.githubusercontent.com/JarcoCZ/Control-Script/refs/heads/main/test.lua'))()  
             end)  
+        -- New commands for your sword fight bot  
+        elseif command == ".play" then  
+            getgenv().Daddy_Catches_You = true  
+            sendMessage("Sword fight bot enabled!")  
+        elseif command == ".stop" then  
+            getgenv().Daddy_Catches_You = false  
+            sendMessage("Sword fight bot disabled.")  
         else  
             -- If it starts with a dot but wasn't any of the above commands  
             sendMessage("Command " .. command .. " doesn't exist!")  
@@ -707,42 +785,42 @@ local function onCharacterAdded(char)
     stopSafeZoneLoop()  
     local humanoid = char:WaitForChild("Humanoid", 10)  
     if humanoid then  
-        humanoid.Died:Connect(function()   
-            onCharacterDied(humanoid)   
+        humanoid.Died:Connect(function()  
+            onCharacterDied(humanoid)  
             -- We are removing the storage of DeathPositions for automatic respawn teleportation  
             -- if LP.Character and LP.Character.PrimaryPart then  
             --     DeathPositions[LP.Name] = LP.Character.PrimaryPart.CFrame  
             -- end  
         end)  
     end  
-    
+
     local player = Players:GetPlayerFromCharacter(char)  
     -- We are removing the automatic manualAttack on player respawn  
-    -- if player and table.find(Targets, player.Name) then   
+    -- if player and table.find(Targets, player.Name) then  
     --     if PlayersAboutToRespawn[player.Name] then  
-    --         PlayersAboutToRespawn[player.Name] = nil   
-    --         local hrp = char:WaitForChild("HumanoidRootPart", 1)   
+    --         PlayersAboutToRespawn[player.Name] = nil  
+    --         local hrp = char:WaitForChild("HumanoidRootPart", 1)  
     --         if hrp then  
-    --             task.wait(0.05)   
+    --             task.wait(0.05)  
     --             manualAttack(player)  
     --         end  
     --     else  
-    --         task.wait(0.1)   
+    --         task.wait(0.1)  
     --         manualAttack(player)  
     --     end  
     -- end  
 
     for _, item in ipairs(char:GetChildren()) do createReachPart(item) end  
     char.ChildAdded:Connect(createReachPart)  
-    
+
     if #Targets > 0 or AuraEnabled then forceEquip(true) end  
-    
+
     -- This section is removed to prevent your own player from teleporting on respawn  
     -- if DeathPositions[LP.Name] then  
     --     local hrp = char:WaitForChild("HumanoidRootPart", 10)  
-    --     if hrp then task.wait(0.1); hrp.CFrame = DeathPositions[LP.Name]; DeathPositions[LP.Name] = nil end   
+    --     if hrp then task.wait(0.1); hrp.CFrame = DeathPositions[LP.Name]; DeathPositions[LP.Name] = nil end  
     -- end  
-    
+
     if not HeartbeatConnection or not HeartbeatConnection.Connected then  
         HeartbeatConnection = RunService.Heartbeat:Connect(onHeartbeat)  
     end  
@@ -778,13 +856,13 @@ end)
 
 for _, player in ipairs(Players:GetPlayers()) do table.insert(PlayerList, player) end  
 
-Players.PlayerAdded:Connect(function(player)   
-    table.insert(PlayerList, player)   
-    player.CharacterAdded:Connect(onCharacterAdded)   
+Players.PlayerAdded:Connect(function(player)  
+    table.insert(PlayerList, player)  
+    player.CharacterAdded:Connect(onCharacterAdded)  
     -- Removed automatic looping on player join. Players will only be targeted if explicitly added to the 'Targets' list.  
 end)  
 Players.PlayerRemoving:Connect(function(p)  
-    if p.Character and p.Character:FindFirstChildOfClass("Humanoid") then   
+    if p.Character and p.Character:FindFirstChildOfClass("Humanoid") then  
         PlayersAboutToRespawn[p.Name] = true  
     end  
 
@@ -801,7 +879,7 @@ Players.PlayerRemoving:Connect(function(p)
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
-if LP.Character then   
+if LP.Character then  
     onCharacterAdded(LP.Character)  
 end  
 LP.CharacterAdded:Connect(onCharacterAdded)  
