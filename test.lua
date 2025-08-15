@@ -14,8 +14,6 @@
     - Added .join command for specific place teleport.  
     - Corrected command not found message to avoid spam.  
     - Updated .join command to use Place ID 6110766473.  
-    - Added .play command to enable spamming and auto-equip first tool.  
-    - Ensured bot does not target auto-whitelisted players.  
 ]]  
 
 -- Services  
@@ -119,7 +117,7 @@ local function findPlayer(partialName)
         end  
     end  
     return nil  
-}  
+end  
 
 local function teleportTo(character, destination)  
     if character and character.PrimaryPart then  
@@ -145,22 +143,19 @@ local function getClosestPlayer()
         if v.Name ~= LP.Name then -- Don't target self  
             -- Check if player character exists, is alive, and has necessary parts  
             if v.Character and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 and v.Character:FindFirstChild("HumanoidRootPart") and v.Character:FindFirstChild("Head") then  
-                -- Check if player is in the Whitelist (including AutoWhitelistUsers)  
-                if not table.find(Whitelist, v.Name) then  
-                    if v.Character:FindFirstChildOfClass("ForceField") then  
-                        -- Player has a forcefield, skip them  
-                    else  
-                        -- Cast a ray downwards from the target's HumanoidRootPart to check if they are on solid ground/part  
-                        local ray = Ray.new(v.Character:FindFirstChild("HumanoidRootPart").Position, Vector3.new(0,-100000,0))  
-                        local hitPart, hitPosition = game:GetService("Workspace"):FindPartOnRay(ray, v.Character)  
+                if v.Character:FindFirstChildOfClass("ForceField") then  
+                    -- Player has a forcefield, skip them  
+                else  
+                    -- Cast a ray downwards from the target's HumanoidRootPart to check if they are on solid ground/part  
+                    local ray = Ray.new(v.Character:FindFirstChild("HumanoidRootPart").Position, Vector3.new(0,-100000,0))  
+                    local hitPart, hitPosition = game:GetService("Workspace"):FindPartOnRay(ray, v.Character)  
 
-                        if hitPart then -- If the ray hits something (player is grounded or near ground)  
-                            local magnitude = (v.Character.HumanoidRootPart.Position - localRootPart.Position).Magnitude  
+                    if hitPart then -- If the ray hits something (player is grounded or near ground)  
+                        local magnitude = (v.Character.HumanoidRootPart.Position - localRootPart.Position).Magnitude  
 
-                            if magnitude < shortestDistance then  
-                                closestPlayer = v  
-                                shortestDistance = magnitude  
-                            end  
+                        if magnitude < shortestDistance then  
+                            closestPlayer = v  
+                            shortestDistance = magnitude  
                         end  
                     end  
                 end  
@@ -194,7 +189,7 @@ local function fireTouch(part1, part2)
         firetouchinterest(part1, part2, 0)  
         firetouchinterest(part1, part2, 1)  
     end  
-}  
+end  
 
 local function killLoop(player, toolPart)  
     if KillStates[player] then return end  
@@ -282,15 +277,6 @@ local function onHeartbeat()
 
     if SpammingEnabled then  
         local tool = LP.Character:FindFirstChildOfClass("Tool")  
-        -- If no tool equipped, try to equip the first one from backpack  
-        if not tool then  
-            local backpackTool = LP.Backpack:FindFirstChildWhichIsA("Tool")  
-            if backpackTool then  
-                LP.Character.Humanoid:EquipTool(backpackTool)  
-                task.wait(0.1) -- Give a small moment for the tool to equip  
-                tool = LP.Character:FindFirstChildOfClass("Tool")  
-            end  
-        end  
         if tool then pcall(function() tool:Activate() end) end  
     end  
 
@@ -330,7 +316,6 @@ local function onHeartbeat()
                     if player ~= LP and player.Character then  
                         local targetHumanoid = player.Character:FindFirstChildOfClass("Humanoid")  
                         if targetHumanoid and targetHumanoid.Health > 0 then  
-                            -- Ensure we don't target whitelisted players (including auto-whitelisted)  
                             if not table.find(Whitelist, player.Name) then  
                                 local isTargeted = table.find(Targets, player.Name)  
                                 local distToPlayer = AuraEnabled and (player.Character.PrimaryPart.Position - myPos).Magnitude or math.huge  
@@ -404,10 +389,9 @@ local function forceEquip(shouldEquip)
         if not ForceEquipConnection then  
             ForceEquipConnection = RunService.Heartbeat:Connect(function()  
                 if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
-                    -- Always try to equip the first tool in the backpack  
-                    local backpackTool = LP.Backpack:FindFirstChildWhichIsA("Tool")  
-                    if backpackTool and not LP.Character:FindFirstChild(backpackTool.Name) then  
-                        LP.Character.Humanoid:EquipTool(backpackTool)  
+                    local sword = LP.Backpack:FindFirstChildWhichIsA("Tool") or LP.Character:FindFirstChildWhichIsA("Tool")  
+                    if sword and not LP.Character:FindFirstChild(sword.Name) then  
+                        LP.Character.Humanoid:EquipTool(sword)  
                     end  
                 end  
             end)  
@@ -440,7 +424,7 @@ local function removeTarget(playerName)
         for i, name in ipairs(Targets) do  
             if name == player.Name then table.remove(Targets, i); break end  
         end  
-        if #Targets == 0 and not AuraEnabled and not SpammingEnabled and not getgenv().Daddy_Catches_You then forceEquip(false) end  
+        if #Targets == 0 and not AuraEnabled then forceEquip(false) end  
     end  
 end  
 
@@ -465,7 +449,7 @@ local function spinLoop()
         if not (spinTarget and spinTarget.Parent and spinTarget.Character and spinTarget.Character.PrimaryPart) then  
             stopSpinLoop()  
             return  
-        }  
+        end  
         if not (LP.Character and LP.Character.PrimaryPart) then  
             stopSpinLoop()  
             return  
@@ -481,15 +465,14 @@ local function spinLoop()
 
         teleportTo(LP.Character, CFrame.new(myNewPos, lookAtPos))  
     end)  
-}  
+end  
 
 local function setAura(range)  
     local newRange = tonumber(range)  
     if newRange and newRange >= 0 then  
         Dist = newRange  
         AuraEnabled = newRange > 0  
-        -- Only force equip if Aura is enabled OR if bot is active OR if there are specific targets  
-        forceEquip(AuraEnabled or #Targets > 0 or getgenv().Daddy_Catches_You or SpammingEnabled)  
+        forceEquip(AuraEnabled or #Targets > 0)  
 
         if LP.Character then  
             for _, tool in ipairs(LP.Character:GetChildren()) do  
@@ -626,10 +609,7 @@ local function onMessageReceived(messageData)
         elseif command == ".unloop" and arg2 then  
             if arg2:lower() == "all" then  
                 table.clear(Targets)  
-                -- Only disable force equip if aura, spamming, and bot are all off  
-                if not AuraEnabled and not SpammingEnabled and not getgenv().Daddy_Catches_You then  
-                    forceEquip(false)  
-                end  
+                forceEquip(AuraEnabled)  
             else  
                 removeTarget(arg2)  
             end  
@@ -708,38 +688,21 @@ local function onMessageReceived(messageData)
             local maxPlayers = Players.MaxPlayers  
             sendMessage(playerCount .. "/" .. maxPlayers .. " players")  
         elseif command == ".equip" then  
-            -- This command will now trigger forceEquip if bot is active  
-            if getgenv().Daddy_Catches_You or SpammingEnabled or AuraEnabled or #Targets > 0 then  
-                forceEquip(true)  
-            else  
-                -- Manual equip if bot is not active  
-                if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
-                    local tool = LP.Backpack:FindFirstChildWhichIsA("Tool")  
-                    if tool then LP.Character.Humanoid:EquipTool(tool) end  
-                end  
+            if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
+                local tool = LP.Backpack:FindFirstChildWhichIsA("Tool")  
+                if tool then LP.Character.Humanoid:EquipTool(tool) end  
             end  
         elseif command == ".unequip" then  
-            -- This command will now disable forceEquip if bot is active  
-            if getgenv().Daddy_Catches_You or SpammingEnabled or AuraEnabled or #Targets > 0 then  
-                forceEquip(false)  
-            else  
-                -- Manual unequip if bot is not active  
-                if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
-                    local tool = LP.Character:FindFirstChildWhichIsA("Tool")  
-                    if tool then tool.Parent = LP.Backpack end  
-                end  
+            if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
+                local tool = LP.Character:FindFirstChildWhichIsA("Tool")  
+                if tool then tool.Parent = LP.Backpack end  
             end  
         elseif command == ".fjump" then  
             frogJump()  
         elseif command == ".spam" then  
             SpammingEnabled = true  
-            forceEquip(true) -- Enable forceEquip when spamming  
         elseif command == ".unspam" then  
             SpammingEnabled = false  
-            -- Only disable force equip if aura, spamming, and bot are all off  
-            if not AuraEnabled and not SpammingEnabled and not getgenv().Daddy_Catches_You then  
-                forceEquip(false)  
-            end  
         elseif command == ".say" and arg2 then  
             table.remove(args, 1)  
             local message = table.concat(args, " ")  
@@ -807,16 +770,9 @@ local function onMessageReceived(messageData)
         -- New commands for your sword fight bot  
         elseif command == ".play" then  
             getgenv().Daddy_Catches_You = true  
-            SpammingEnabled = true -- Enable spamming on .play  
-            forceEquip(true) -- Always auto-equip the first tool  
             sendMessage("Sword fight bot enabled!")  
         elseif command == ".stop" then  
             getgenv().Daddy_Catches_You = false  
-            SpammingEnabled = false -- Disable spamming on .stop  
-            -- Only disable force equip if aura, spamming, and bot are all off  
-            if not AuraEnabled and not SpammingEnabled and not getgenv().Daddy_Catches_You then  
-                forceEquip(false)  
-            end  
             sendMessage("Sword fight bot disabled.")  
         else  
             -- If it starts with a dot but wasn't any of the above commands  
@@ -831,14 +787,39 @@ local function onCharacterAdded(char)
     if humanoid then  
         humanoid.Died:Connect(function()  
             onCharacterDied(humanoid)  
+            -- We are removing the storage of DeathPositions for automatic respawn teleportation  
+            -- if LP.Character and LP.Character.PrimaryPart then  
+            --     DeathPositions[LP.Name] = LP.Character.PrimaryPart.CFrame  
+            -- end  
         end)  
     end  
+
+    local player = Players:GetPlayerFromCharacter(char)  
+    -- We are removing the automatic manualAttack on player respawn  
+    -- if player and table.find(Targets, player.Name) then  
+    --     if PlayersAboutToRespawn[player.Name] then  
+    --         PlayersAboutToRespawn[player.Name] = nil  
+    --         local hrp = char:WaitForChild("HumanoidRootPart", 1)  
+    --         if hrp then  
+    --             task.wait(0.05)  
+    --             manualAttack(player)  
+    --         end  
+    --     else  
+    --         task.wait(0.1)  
+    --         manualAttack(player)  
+    --     end  
+    -- end  
 
     for _, item in ipairs(char:GetChildren()) do createReachPart(item) end  
     char.ChildAdded:Connect(createReachPart)  
 
-    -- Force equip if bot is active, spamming, or aura is enabled  
-    if #Targets > 0 or AuraEnabled or getgenv().Daddy_Catches_You or SpammingEnabled then forceEquip(true) end  
+    if #Targets > 0 or AuraEnabled then forceEquip(true) end  
+
+    -- This section is removed to prevent your own player from teleporting on respawn  
+    -- if DeathPositions[LP.Name] then  
+    --     local hrp = char:WaitForChild("HumanoidRootPart", 10)  
+    --     if hrp then task.wait(0.1); hrp.CFrame = DeathPositions[LP.Name]; DeathPositions[LP.Name] = nil end  
+    -- end  
 
     if not HeartbeatConnection or not HeartbeatConnection.Connected then  
         HeartbeatConnection = RunService.Heartbeat:Connect(onHeartbeat)  
@@ -866,6 +847,11 @@ safePlatform.CanCollide = true
 
 task.spawn(function()  
     ChangeTimeEvent = ReplicatedStorage:WaitForChild("ChangeTime", 30)  
+    -- if ChangeTimeEvent then  
+    --     print("Floxy System: ChangeTime event successfully located.")  -- Removed  
+    -- else  
+    --     warn("Floxy System: ChangeTime event could not be located after 30s.") -- Removed  
+    -- end  
 end)  
 
 for _, player in ipairs(Players:GetPlayers()) do table.insert(PlayerList, player) end  
@@ -873,6 +859,7 @@ for _, player in ipairs(Players:GetPlayers()) do table.insert(PlayerList, player
 Players.PlayerAdded:Connect(function(player)  
     table.insert(PlayerList, player)  
     player.CharacterAdded:Connect(onCharacterAdded)  
+    -- Removed automatic looping on player join. Players will only be targeted if explicitly added to the 'Targets' list.  
 end)  
 Players.PlayerRemoving:Connect(function(p)  
     if p.Character and p.Character:FindFirstChildOfClass("Humanoid") then  
@@ -888,6 +875,7 @@ Players.PlayerRemoving:Connect(function(p)
         MainConnector = nil; table.clear(ConnectedUsers); table.clear(Whitelist)  
         sendMessage("Main Connector has left. Connection reset.")  
     end  
+    -- Removed condition to destroy safePlatform if only one player remains  
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
@@ -904,6 +892,7 @@ task.spawn(function()
         LP.CharacterAdded:Wait()  
         teleportTo(LP.Character, SAFE_PLATFORM_POS + Vector3.new(0, 5, 0))  
     end  
-end)
+end)  
 
-sendMessage("v2")
+sendMessage("v") -- Removed  
+-- print("Floxy System Loaded. User Authorized.") -- Removed
