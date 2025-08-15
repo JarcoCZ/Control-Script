@@ -13,6 +13,7 @@
     - Fixed .shop server hop logic.  
     - Added .join command for specific place teleport.  
     - Corrected command not found message to avoid spam.  
+    - Updated .join command to use Place ID 6110766473.  
 ]]  
 
 -- Services  
@@ -587,7 +588,7 @@ local function onMessageReceived(messageData)
         elseif command == ".shop" then  
             serverHop()  
         elseif command == ".join" then  
-            local targetPlaceId = 86570022656177  
+            local targetPlaceId = 6110766473 -- Updated Place ID  
             pcall(function()  
                 TeleportService:Teleport(targetPlaceId, LP)  
             end)  
