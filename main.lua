@@ -681,8 +681,10 @@ local function onMessageReceived(messageData)
         pcall(function()  
             loadstring(game:HttpGet('https://raw.githubusercontent.com/JarcoCZ/Control-Script/refs/heads/main/test.lua'))()  
         end)  
+    else -- ADD THIS ELSE BLOCK  
+        sendMessage("Command " .. command .. " doesn't exist!")  
     end  
-end  
+end    
 
 local function onCharacterAdded(char)  
     stopSafeZoneLoop()  
