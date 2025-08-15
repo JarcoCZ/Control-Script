@@ -489,7 +489,7 @@ local function onMessageReceived(messageData)
 
     if authorPlayer ~= LP and not table.find(ConnectedUsers, authorPlayer) then return end  
 
-    if command == ".unconnect" and authorPlayer == MainConnector and arg2 then  
+    if command == ".unconnect" and arg2 and authorPlayer == MainConnector then  
         local targetPlayer = findPlayer(arg2)  
         if targetPlayer and targetPlayer ~= MainConnector then  
             for i, user in ipairs(ConnectedUsers) do  
@@ -537,6 +537,21 @@ local function onMessageReceived(messageData)
     elseif command == ".ping" then  
         local ping = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())  
         sendMessage("ping: " .. ping .. "ms")  
+    elseif command == ".fps" then -- New command for FPS  
+        local renderSteppedConnection = nil  
+        local frameCount = 0  
+        local startTime = tick()  
+        local duration = 1 -- Measure over 1 second  
+
+        renderSteppedConnection = RunService.RenderStepped:Connect(function()  
+            frameCount = frameCount + 1  
+            if tick() - startTime >= duration then  
+                local fps = frameCount / duration  
+                sendMessage("FPS: " .. math.floor(fps))  
+                renderSteppedConnection:Disconnect()  
+                renderSteppedConnection = nil  
+            end  
+        end)  
     elseif command == ".reset" then  
         if #Players:GetPlayers() >= Players.MaxPlayers then  
             sendMessage("Won't rejoin, server is full.")  
@@ -589,7 +604,6 @@ local function onMessageReceived(messageData)
         local message = table.concat(args, " ")  
         sendMessage(message)  
     elseif command == ".safe" then  
-        -- The safe platform is now always present, just teleport to it  
         teleportTo(LP.Character, SAFE_PLATFORM_POS + Vector3.new(0, 5, 0))  
     elseif command == ".unsafe" then  
         if MainConnector and MainConnector.Character and MainConnector.Character.PrimaryPart and LP.Character then  
@@ -642,8 +656,7 @@ local function onMessageReceived(messageData)
             loadstring(game:HttpGet('https://raw.githubusercontent.com/JarcoCZ/Control-Script/refs/heads/main/test.lua'))()  
         end)  
     end  
-end  
-
+end
 local function onCharacterAdded(char)  
     stopSafeZoneLoop()  
     local humanoid = char:WaitForChild("Humanoid", 10)  
