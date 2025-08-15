@@ -476,7 +476,7 @@ local function onMessageReceived(messageData)
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
-            sendMessage("!)  
+            sendMessage("!")  
         elseif authorPlayer == MainConnector and arg2 then  
             local targetPlayer = findPlayer(arg2)  
             if targetPlayer and not table.find(ConnectedUsers, targetPlayer) then  
