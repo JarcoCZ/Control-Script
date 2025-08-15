@@ -63,7 +63,7 @@ local FROG_JUMP_PREP_DIST = 3
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0P22"  -- Placeholder/Example, replace with actual if needed. Removed from real use.  
 
 -- Authorization  
-local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
+local AuthorizedUsers = { 1588706905, 3495579817, 7569689472 }  
 -- Automatically whitelisted users for Aura  
 local AutoWhitelistUsers = {  
     "cubot_nova4",  
