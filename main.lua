@@ -393,7 +393,12 @@ local function setAura(range)
 end  
 
 local function serverHop()  
-    local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))  
+    local servers = {}  
+    pcall(function()  
+        local raw = game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")  
+        servers = HttpService:JSONDecode(raw)  
+    end)  
+
     if servers and servers.data then  
         local serverList = {}  
         for _, server in ipairs(servers.data) do  
@@ -403,7 +408,11 @@ local function serverHop()
         end  
         if #serverList > 0 then  
             TeleportService:TeleportToPlaceInstance(game.PlaceId, serverList[math.random(1, #serverList)], LP)  
+        else  
+            sendMessage("No available servers found to hop to.")  
         end  
+    else  
+        sendMessage("Failed to retrieve server list.")  
     end  
 end  
 
@@ -453,11 +462,11 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    if command == "connect" then  
+    if command == " " then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
-            sendMessage("Connected With " .. authorPlayer.Name)  
+            sendMessage("!")  
         elseif authorPlayer == MainConnector and arg2 then  
             local targetPlayer = findPlayer(arg2)  
             if targetPlayer and not table.find(ConnectedUsers, targetPlayer) then  
@@ -640,7 +649,13 @@ local function onCharacterAdded(char)
     stopSafeZoneLoop()  
     local humanoid = char:WaitForChild("Humanoid", 10)  
     if humanoid then  
-        humanoid.Died:Connect(function() onCharacterDied(humanoid) end)  
+        humanoid.Died:Connect(function()   
+            onCharacterDied(humanoid)   
+            -- Store current position before death for later teleport  
+            if LP.Character and LP.Character.PrimaryPart then  
+                DeathPositions[LP.Name] = LP.Character.PrimaryPart.CFrame  
+            end  
+        end)  
     end  
     
     local player = Players:GetPlayerFromCharacter(char)  
@@ -722,5 +737,15 @@ if LP.Character then
 end  
 LP.CharacterAdded:Connect(onCharacterAdded)  
 
-sendMessage("v60)") -- Removed  
+-- Initial teleport to safe platform on script execution  
+task.spawn(function()  
+    if LP.Character then  
+        teleportTo(LP.Character, SAFE_PLATFORM_POS + Vector3.new(0, 5, 0))  
+    else  
+        LP.CharacterAdded:Wait()  
+        teleportTo(LP.Character, SAFE_PLATFORM_POS + Vector3.new(0, 5, 0))  
+    end  
+end)  
+
+sendMessage(" ") -- Removed  
 -- print("Floxy System Loaded. User Authorized.") -- Removed
