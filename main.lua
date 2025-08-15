@@ -411,28 +411,37 @@ end
 
 local function serverHop()  
     local servers = {}  
-    pcall(function()  
+    local success, err = pcall(function()  
         local raw = game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")  
         servers = HttpService:JSONDecode(raw)  
     end)  
 
+    if not success then  
+        sendMessage("Failed to retrieve server list: " .. err)  
+        return  
+    end  
+
     if servers and servers.data then  
         local serverList = {}  
         for _, server in ipairs(servers.data) do  
+            -- Check if the server is not the current server and has available slots  
             if type(server) == "table" and server.id ~= game.JobId and server.playing < server.maxPlayers then  
                 table.insert(serverList, server.id)  
             end  
         end  
+        
         if #serverList > 0 then  
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, serverList[math.random(1, #serverList)], LP)  
+            local targetServerId = serverList[math.random(1, #serverList)]  
+            -- Ensure that we are teleporting the local player to the correct place and instance.  
+            -- The first argument should be the PlaceId, second is the JobId (instance ID).  
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, targetServerId, LP)  
         else  
-            sendMessage("No available servers found to hop to.")  
+            sendMessage("No other available servers found to hop to.")  
         end  
     else  
-        sendMessage("Failed to retrieve server list.")  
+        sendMessage("Failed to retrieve server list (empty data).")  
     end  
-end  
-
+end
 local function displayCommands()  
     local commandList_1 = [[  
 .kill [user], .loop [user|all], .unloop [user|all]  
