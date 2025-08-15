@@ -59,6 +59,16 @@ local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzc
 
 -- Authorization  
 local AuthorizedUsers = { 1588706905, 9167607498, 7569689472 }  
+-- Automatically whitelisted users for Aura  
+local AutoWhitelistUsers = {  
+    "cubot_nova4",  
+    "Cub0t_01",  
+    "Cubot_Nova3",  
+    "FlexFightPro68",  
+    "FlexFightPro69",  
+    "defnotluxs",  
+    "e5c4qe"  
+}  
 
 -- ==================================  
 -- ==      HELPER FUNCTIONS        ==  
@@ -579,20 +589,9 @@ local function onMessageReceived(messageData)
         local message = table.concat(args, " ")  
         sendMessage(message)  
     elseif command == ".safe" then  
-        if not safePlatform or not safePlatform.Parent then  
-            safePlatform = Instance.new("Part", Workspace)  
-            safePlatform.Name = "SafePlatform"  
-            safePlatform.Size = Vector3.new(50, 2, 50)  
-            safePlatform.Position = SAFE_PLATFORM_POS  
-            safePlatform.Anchored = true  
-            safePlatform.CanCollide = true  
-        end  
+        -- The safe platform is now always present, just teleport to it  
         teleportTo(LP.Character, SAFE_PLATFORM_POS + Vector3.new(0, 5, 0))  
     elseif command == ".unsafe" then  
-        if safePlatform and safePlatform.Parent then  
-            safePlatform:Destroy()  
-            safePlatform = nil  
-        end  
         if MainConnector and MainConnector.Character and MainConnector.Character.PrimaryPart and LP.Character then  
             teleportTo(LP.Character, MainConnector.Character.PrimaryPart.Position + Vector3.new(0, 5, 0))  
         else  
@@ -694,6 +693,21 @@ end
 -- ==      INITIALIZATION          ==  
 -- ==================================  
 
+-- Add auto-whitelisted users to the Whitelist table  
+for _, username in ipairs(AutoWhitelistUsers) do  
+    if not table.find(Whitelist, username) then  
+        table.insert(Whitelist, username)  
+    end  
+end  
+
+-- Create the safe platform at initialization  
+safePlatform = Instance.new("Part", Workspace)  
+safePlatform.Name = "SafePlatform"  
+safePlatform.Size = Vector3.new(50, 2, 50)  
+safePlatform.Position = SAFE_PLATFORM_POS  
+safePlatform.Anchored = true  
+safePlatform.CanCollide = true  
+
 task.spawn(function()  
     ChangeTimeEvent = ReplicatedStorage:WaitForChild("ChangeTime", 30)  
     -- if ChangeTimeEvent then  
@@ -726,9 +740,7 @@ Players.PlayerRemoving:Connect(function(p)
         MainConnector = nil; table.clear(ConnectedUsers); table.clear(Whitelist)  
         sendMessage("Main Connector has left. Connection reset.")  
     end  
-    if safePlatform and #Players:GetPlayers() == 1 then  
-        pcall(function() safePlatform:Destroy() end)  
-    end  
+    -- Removed condition to destroy safePlatform if only one player remains  
 end)  
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
