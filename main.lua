@@ -169,12 +169,19 @@ local function killLoop(player, toolPart)
     end)  
 end  
 
-local function addTarget(playerName)  
-    local player = findPlayer(playerName)  
-    if player and player ~= LP and not table.find(Targets, player.Name) then  
-        table.insert(Targets, player.Name); forceEquip(true)  
+local function attackPlayer(toolPart, player)  
+    local targetChar = player.Character  
+    local targetHumanoid = targetChar and targetChar:FindFirstChildOfClass("Humanoid")  
+    if not (targetHumanoid and targetHumanoid.Health > 0) then return end  
+    
+    pcall(function() toolPart.Parent:Activate() end)  
+    for _ = 1, DMG_TIMES do  
+        for _, part in ipairs(targetChar:GetChildren()) do   
+            if part:IsA("BasePart") then fireTouch(toolPart, part) end  
+        end  
     end  
-end
+    killLoop(player, toolPart)  
+end  
 
 local function manualAttack(targetPlayer)  
     local character = LP.Character  
