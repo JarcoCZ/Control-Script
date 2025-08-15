@@ -334,7 +334,7 @@ local function addTarget(playerName)
     if player and player ~= LP and not table.find(Targets, player.Name) then  
         table.insert(Targets, player.Name); forceEquip(true)  
     end  
-end
+end  
 
 local function removeTarget(playerName)  
     local player = findPlayer(playerName)  
