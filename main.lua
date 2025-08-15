@@ -683,7 +683,15 @@ local function onMessageReceived(messageData)
                 teleportTo(LP.Character, CFrame.new(myNewPos) * (myHRP.CFrame - myHRP.CFrame.Position))  
             end)  
         elseif command == ".unsafezone" then  
-            stopSafeZoneLoop()  
+            stopSafeZoneLoop()
+        elseif command == ".log" then -- New .log command  
+            if LP.Character then  
+                sendMessage("Logging out...")  
+                -- Teleport to the same place, effectively leaving the current server  
+                game:GetService("TeleportService"):Teleport(game.PlaceId)   
+            else  
+                sendMessage("Cannot log out: Character not found.")  
+            end
         elseif command == ".test" then  
             pcall(function()  
                 loadstring(game:HttpGet('https://raw.githubusercontent.com/JarcoCZ/Control-Script/refs/heads/main/test.lua'))()  
