@@ -87,16 +87,6 @@ local AutoWhitelistUsers = {
 -- ==      HELPER FUNCTIONS        ==  
 -- ==================================  
 
-local fightPlatform = Instance.new("Part")  
-fightPlatform.Name = "FIGHT_PLATFORM"  
-fightPlatform.Position = FIGHT_PLATFORM_POS -- Using your Vector3 position variable  
-fightPlatform.Size = FIGHT_PLATFORM_SIZE  
-fightPlatform.Anchored = true  
-fightPlatform.CanCollide = true  
-fightPlatform.BrickColor = BrickColor.new("Dark grey")  
-fightPlatform.TopSurface = Enum.SurfaceType.Smooth  
-fightPlatform.Material = Enum.Material.Neon   
-
 local function isAuthorized(userId)  
     for _, id in ipairs(AuthorizedUsers) do if userId == id then return true end end  
     return false  
@@ -738,6 +728,15 @@ local function onMessageReceived(messageData)
                 end  
             end 
         elseif command == ".fight" then
+            local fightPlatform = Instance.new("Part")  
+            fightPlatform.Name = "FIGHT_PLATFORM"  
+            fightPlatform.Position = FIGHT_PLATFORM_POS -- Using your Vector3 position variable  
+            fightPlatform.Size = FIGHT_PLATFORM_SIZE  
+            fightPlatform.Anchored = true  
+            fightPlatform.CanCollide = true  
+            fightPlatform.BrickColor = BrickColor.new("Dark grey")  
+            fightPlatform.TopSurface = Enum.SurfaceType.Smooth  
+            fightPlatform.Material = Enum.Material.Neon   
             teleportTo(LP.Character, FIGHT_PLATFORM_POS + Vector3.new(0, 5, 0))  
         elseif command == ".safezone" and arg2 then  
             local targetPlayer = findPlayer(arg2)  
