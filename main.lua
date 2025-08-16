@@ -851,7 +851,7 @@ safePlatform.CanCollide = true
 -- Create the safe platform at initialization  
 fightPlatform = Instance.new("Part", Workspace)  
 fightPlatform.Name = "FightPlatform"  
-fightPlatform.Size = Vector3.new(10, 2, 10)  
+fightPlatform.Size = Vector3.new(20, 2, 20)  
 fightPlatform.Position = FIGHT_PLATFORM_POS  
 fightPlatform.Anchored = true  
 fightPlatform.CanCollide = true  
