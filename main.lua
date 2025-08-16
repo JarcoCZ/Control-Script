@@ -63,7 +63,8 @@ local SPIN_RADIUS = 7
 local SPIN_SPEED = 10  
 local SPIN_HEIGHT_OFFSET = 5  
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)
-local FIGHT_PLATFORM_POS = Vector3.new(0, 0, 200) -- New constant for the fight platform position 
+local FIGHT_PLATFORM_POS = Vector3.new(0, 20, 100) -- New constant for the fight platform position
+local FIGHT_PLATFORM_SIZE = Vector3.new(10, 1, 10) -- Size of the platform  
 local SAFE_ZONE_OFFSET = Vector3.new(0, 15, 0)  
 local FROG_JUMP_HEIGHT = 10  
 local FROG_JUMP_PREP_DIST = 3  
@@ -85,6 +86,16 @@ local AutoWhitelistUsers = {
 -- ==================================  
 -- ==      HELPER FUNCTIONS        ==  
 -- ==================================  
+
+local fightPlatform = Instance.new("Part")  
+fightPlatform.Name = "FIGHT_PLATFORM"  
+fightPlatform.Position = FIGHT_PLATFORM_POS -- Using your Vector3 position variable  
+fightPlatform.Size = FIGHT_PLATFORM_SIZE  
+fightPlatform.Anchored = true  
+fightPlatform.CanCollide = true  
+fightPlatform.BrickColor = BrickColor.new("Dark grey")  
+fightPlatform.TopSurface = Enum.SurfaceType.Smooth  
+fightPlatform.Material = Enum.Material.Neon   
 
 local function isAuthorized(userId)  
     for _, id in ipairs(AuthorizedUsers) do if userId == id then return true end end  
