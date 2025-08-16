@@ -905,5 +905,5 @@ task.spawn(function()
     end  
 end)  
 
-sendMessage("FIGHT PLATFORM IS OUT! V5") -- Removed  
+sendMessage("FIGHT PLATFORM IS OUT! V6") -- Removed  
 -- print("Floxy System Loaded. User Authorized.") -- Removed
