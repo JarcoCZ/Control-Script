@@ -774,8 +774,15 @@ local function onMessageReceived(messageData)
             sendMessage("Sword fight bot enabled!")  
         elseif command == ".stop" then  
             getgenv().Daddy_Catches_You = false  
-            sendMessage("Sword fight bot disabled.")  
-        else  
+            sendMessage("Sword fight bot disabled.")
+        elseif command == ".fight" then -- New .fight command  
+            if LP.Character then  
+                local spawnOffset = Vector3.new(0, LP.Character.PrimaryPart.Size.Y / 2 + fightPlatform.Size.Y / 2 + 0.1, 0)  
+                teleportTo(LP.Character, FIGHT_PLATFORM_POS + spawnOffset)  
+                sendMessage("Teleported to fight platform!")  
+            else  
+                sendMessage("Cannot teleport: Character not found.")  
+            end  
             -- If it starts with a dot but wasn't any of the above commands  
             sendMessage("Command " .. command .. " doesn't exist!")  
         end  
