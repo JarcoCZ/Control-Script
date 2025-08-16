@@ -63,8 +63,7 @@ local SPIN_RADIUS = 7
 local SPIN_SPEED = 10  
 local SPIN_HEIGHT_OFFSET = 5  
 local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)
-local FIGHT_PLATFORM_POS = Vector3.new(0, 20, 100) -- New constant for the fight platform position
-local FIGHT_PLATFORM_SIZE = Vector3.new(10, 1, 10) -- Size of the platform  
+local FIGHT_PLATFORM_POS = Vector3.new(0, 20, 100) -- New constant for the fight platform position 
 local SAFE_ZONE_OFFSET = Vector3.new(0, 15, 0)  
 local FROG_JUMP_HEIGHT = 10  
 local FROG_JUMP_PREP_DIST = 3  
@@ -728,16 +727,7 @@ local function onMessageReceived(messageData)
                 end  
             end 
         elseif command == ".fight" then
-            local fightPlatform = Instance.new("Part")  
-            fightPlatform.Name = "FIGHT_PLATFORM"  
-            fightPlatform.Position = FIGHT_PLATFORM_POS -- Using your Vector3 position variable  
-            fightPlatform.Size = FIGHT_PLATFORM_SIZE  
-            fightPlatform.Anchored = true  
-            fightPlatform.CanCollide = true  
-            fightPlatform.BrickColor = BrickColor.new("Dark grey")  
-            fightPlatform.TopSurface = Enum.SurfaceType.Smooth  
-            fightPlatform.Material = Enum.Material.Neon   
-            teleportTo(LP.Character, FIGHT_PLATFORM_POS + Vector3.new(0, 5, 0))  
+             teleportTo(LP.Character, FIGHT_PLATFORM_POS + Vector3.new(0, 5, 0))  
         elseif command == ".safezone" and arg2 then  
             local targetPlayer = findPlayer(arg2)  
             if not (targetPlayer and LP.Character and LP.Character.PrimaryPart) then return end  
@@ -857,6 +847,14 @@ safePlatform.Size = Vector3.new(50, 2, 50)
 safePlatform.Position = SAFE_PLATFORM_POS  
 safePlatform.Anchored = true  
 safePlatform.CanCollide = true  
+
+-- Create the safe platform at initialization  
+fightPlatform = Instance.new("Part", Workspace)  
+fightPlatform.Name = "FightPlatform"  
+fightPlatform.Size = Vector3.new(10, 2, 10)  
+fightPlatform.Position = FIGHT_PLATFORM_POS  
+fightPlatform.Anchored = true  
+fightPlatform.CanCollide = true  
 
 task.spawn(function()  
     ChangeTimeEvent = ReplicatedStorage:WaitForChild("ChangeTime", 30)  
