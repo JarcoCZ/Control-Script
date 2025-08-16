@@ -725,7 +725,9 @@ local function onMessageReceived(messageData)
                 else  
                     if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then LP.Character.Humanoid.Health = 0 end  
                 end  
-            end  
+            end 
+        elseif command == ".fight" then
+            teleportTo(LP.Character, FIGHT_PLATFORM_POS + Vector3.new(0, 5, 0))  
         elseif command == ".safezone" and arg2 then  
             local targetPlayer = findPlayer(arg2)  
             if not (targetPlayer and LP.Character and LP.Character.PrimaryPart) then return end  
