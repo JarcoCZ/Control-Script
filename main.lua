@@ -566,7 +566,7 @@ local function onMessageReceived(messageData)
     local arg3 = args[3] or nil  
 
     -- Special handling for the 'e' command (connection)  
-    if command == "e" then  
+    if command == "$" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
             table.insert(ConnectedUsers, authorPlayer); table.insert(Whitelist, authorPlayer.Name)  
