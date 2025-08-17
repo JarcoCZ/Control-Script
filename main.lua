@@ -851,7 +851,7 @@ safePlatform.CanCollide = true
 -- Create the safe platform at initialization  
 fightPlatform = Instance.new("Part", Workspace)  
 fightPlatform.Name = "FightPlatform"  
-fightPlatform.Size = Vector3.new(20, 2, 20)  
+fightPlatform.Size = Vector3.new(15, 2, 15)  
 fightPlatform.Position = FIGHT_PLATFORM_POS  
 fightPlatform.Anchored = true  
 fightPlatform.CanCollide = true  
@@ -905,5 +905,5 @@ task.spawn(function()
     end  
 end)  
 
-sendMessage("FIGHT PLATFORM IS OUT! V6") -- Removed  
+sendMessage("FIGHT PLATFORM IS OUT! V7") -- Removed  
 -- print("Floxy System Loaded. User Authorized.") -- Removed
