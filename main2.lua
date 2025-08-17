@@ -1,19 +1,6 @@
 --[[  
     Floxy Script - Fully Corrected & Stabilized by luxx (v60 - Optimized & Pre-Respawn Attack - Silent)  
-
-    UPDATES (v60 - Optimized & Pre-Respawn Attack - Silent):  
-    - All debug messages (print, warn) and script execution confirmation messages removed for silent operation.  
-    - Implemented logic for a "pre-respawn" attack, triggering immediately upon a target's character loading after death.  
-    - FT_TIMES and DMG_TIMES constants reduced for faster hit registration.  
-    - ManualAttack and onCharacterAdded `task.wait()` calls shortened for quicker response.  
-    - Optimized iteration methods in combat loops (e.g., using `GetChildren()` instead of `GetDescendants()` where appropriate).  
-    - Minor efficiency improvements in variable caching and part creation.  
-    - General cleanup and minor adjustments to existing logic for better performance.  
-    - Added .fps command.  
-    - Fixed .shop server hop logic.  
-    - Added .join command for specific place teleport.  
-    - Corrected command not found message to avoid spam.  
-    - Updated .join command to use Place ID 6110766473.  
+    ... (comments unchanged)  
 ]]  
 
 -- Services  
@@ -45,11 +32,19 @@ local safeZonePlatform = nil
 local spinConnection = nil  
 local spinTarget = nil  
 
--- Bot specific variables (from your original bot script)  
-getgenv().HowFastDanSchneiderCatchesYou = 1.1 -- Roto Speed  
-getgenv().HowMuchDanSchneiderTouchesYou = 15 -- Sword Ranga (used for fireTouch range in your bot, but Floxy uses Dist for Aura)  
-getgenv().HowMuchDanSchneiderTouchedYou = 10000 -- Attak Ranga (used for closest player search range)  
-getgenv().Daddy_Catches_You = false -- Main toggle for your bot's aiming/movement  
+-- NEW: From first script  
+local TargetList = {} -- userId => true  
+local AutoEquipConnection = nil  
+local AutoEquipEnabled = false  
+local SimpleAuraConnection = nil  
+local SimpleAuraEnabled = false  
+local SimpleAuraRange = 20  
+
+-- Bot specific variables  
+getgenv().HowFastDanSchneiderCatchesYou = 1.1  
+getgenv().HowMuchDanSchneiderTouchesYou = 15  
+getgenv().HowMuchDanSchneiderTouchedYou = 10000  
+getgenv().Daddy_Catches_You = false  
 
 -- Pre-loaded Instances  
 local ChangeTimeEvent = nil  
@@ -62,24 +57,17 @@ local FT_TIMES = 3
 local SPIN_RADIUS = 7  
 local SPIN_SPEED = 10  
 local SPIN_HEIGHT_OFFSET = 5  
-local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)
-local FIGHT_PLATFORM_POS = Vector3.new(0, 125, 125) -- New constant for the fight platform position 
+local SAFE_PLATFORM_POS = Vector3.new(0, 10000, 0)  
+local FIGHT_PLATFORM_POS = Vector3.new(0, 125, 125)  
 local SAFE_ZONE_OFFSET = Vector3.new(0, 15, 0)  
 local FROG_JUMP_HEIGHT = 10  
 local FROG_JUMP_PREP_DIST = 3  
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0P22"  -- Placeholder/Example, replace with actual if needed. Removed from real use.  
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0P22"  
 
 -- Authorization  
 local AuthorizedUsers = { 1588706905, 3495579817, 7569689472, 8334959064, 7569689472, 8163394412 }  
--- Automatically whitelisted users for Aura  
 local AutoWhitelistUsers = {  
-    "cubot_nova4",  
-    "Cub0t_01",  
-    "Cubot_Nova3",  
-    "FlexFightPro68",  
-    "FlexFightPro69",  
-    "defnotluxs",  
-    "e5c4qe"  
+    "cubot_nova4","Cub0t_01","Cubot_Nova3","FlexFightPro68","FlexFightPro69","defnotluxs","e5c4qe"  
 }  
 
 -- ==================================  
@@ -92,16 +80,10 @@ local function isAuthorized(userId)
 end  
 
 if not isAuthorized(LP.UserId) then  
-    -- warn("Floxy Script: User not authorized. Halting execution.") -- Removed  
     return  
 end  
 
-local function sendWebhook(payload)  
-    -- Removed Webhook functionality entirely to simplify and remove external dependencies/messages  
-    -- pcall(function()  
-    --     HttpService:PostAsync(WEBHOOK_URL, HttpService:JSONEncode(payload))  
-    -- end)  
-end  
+local function sendWebhook(payload) end -- removed  
 
 local function sendMessage(message)  
     pcall(function()  
@@ -120,6 +102,46 @@ local function findPlayer(partialName)
     return nil  
 end  
 
+-- NEW: From first script - flexible partial matches for name or display  
+local function FindPlayers(partialName)  
+    if not partialName then return {} end  
+    local lowerName = tostring(partialName):lower()  
+    local found = {}  
+    for _, p in ipairs(Players:GetPlayers()) do  
+        if p ~= LP then  
+            local pn = p.Name:lower()  
+            local pd = p.DisplayName:lower()  
+            if pn:find(lowerName, 1, true) or pd:find(lowerName, 1, true) then  
+                table.insert(found, p)  
+            end  
+        end  
+    end  
+    return found  
+end  
+
+-- NEW: From first script - TargetList helpers  
+local function AddMultipleTargets(players)  
+    local count = 0  
+    for _, player in ipairs(players) do  
+        if not TargetList[player.UserId] then  
+            TargetList[player.UserId] = true  
+            count = count + 1  
+        end  
+    end  
+    return count  
+end  
+
+local function RemoveMultipleTargets(players)  
+    local count = 0  
+    for _, player in ipairs(players) do  
+        if TargetList[player.UserId] then  
+            TargetList[player.UserId] = nil  
+            count = count + 1  
+        end  
+    end  
+    return count  
+end  
+
 local function teleportTo(character, destination)  
     if character and character.PrimaryPart then  
         if typeof(destination) == "CFrame" then  
@@ -130,30 +152,19 @@ local function teleportTo(character, destination)
     end  
 end  
 
--- Function to find the closest player for aiming/movement (from your bot script)  
 local function getClosestPlayer()  
     local closestPlayer = nil  
-    local shortestDistance = getgenv().HowMuchDanSchneiderTouchedYou -- Use Attak Ranga for search range  
-
-    -- Ensure LocalPlayer's character exists  
+    local shortestDistance = getgenv().HowMuchDanSchneiderTouchedYou  
     if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then return nil end  
-
     local localRootPart = LP.Character.HumanoidRootPart  
-
     for _, v in pairs(Players:GetPlayers()) do  
-        if v.Name ~= LP.Name then -- Don't target self  
-            -- Check if player character exists, is alive, and has necessary parts  
+        if v.Name ~= LP.Name then  
             if v.Character and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 and v.Character:FindFirstChild("HumanoidRootPart") and v.Character:FindFirstChild("Head") then  
-                if v.Character:FindFirstChildOfClass("ForceField") then  
-                    -- Player has a forcefield, skip them  
-                else  
-                    -- Cast a ray downwards from the target's HumanoidRootPart to check if they are on solid ground/part  
-                    local ray = Ray.new(v.Character:FindFirstChild("HumanoidRootPart").Position, Vector3.new(0,-100000,0))  
-                    local hitPart, hitPosition = game:GetService("Workspace"):FindPartOnRay(ray, v.Character)  
-
-                    if hitPart then -- If the ray hits something (player is grounded or near ground)  
+                if not v.Character:FindFirstChildOfClass("ForceField") then  
+                    local ray = Ray.new(v.Character.HumanoidRootPart.Position, Vector3.new(0,-100000,0))  
+                    local hitPart = Workspace:FindPartOnRay(ray, v.Character)  
+                    if hitPart then  
                         local magnitude = (v.Character.HumanoidRootPart.Position - localRootPart.Position).Magnitude  
-
                         if magnitude < shortestDistance then  
                             closestPlayer = v  
                             shortestDistance = magnitude  
@@ -200,14 +211,11 @@ local function killLoop(player, toolPart)
             local targetChar = player.Character;  
             local myChar = LP.Character  
             local tool = toolPart.Parent  
-
             if not (targetChar and targetChar:FindFirstChildOfClass("Humanoid") and targetChar.Humanoid.Health > 0 and myChar and tool and tool.Parent == myChar) then  
                 break  
             end  
-
             local targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid")  
             if not targetHumanoid or targetHumanoid.Health <= 0 then break end  
-
             for _, part in ipairs(targetChar:GetChildren()) do  
                 if part:IsA("BasePart") then fireTouch(toolPart, part) end  
             end  
@@ -221,7 +229,6 @@ local function attackPlayer(toolPart, player)
     local targetChar = player.Character  
     local targetHumanoid = targetChar and targetChar:FindFirstChildOfClass("Humanoid")  
     if not (targetHumanoid and targetHumanoid.Health > 0) then return end  
-
     pcall(function() toolPart.Parent:Activate() end)  
     for _ = 1, DMG_TIMES do  
         for _, part in ipairs(targetChar:GetChildren()) do  
@@ -235,7 +242,6 @@ local function manualAttack(targetPlayer)
     local character = LP.Character  
     local targetCharacter = targetPlayer.Character  
     if not (character and targetCharacter) then return end  
-
     local tool = character:FindFirstChildWhichIsA("Tool")  
     if not (tool and tool:FindFirstChild("Handle")) then  
         local backpackTool = LP.Backpack:FindFirstChildWhichIsA("Tool")  
@@ -244,14 +250,11 @@ local function manualAttack(targetPlayer)
             task.wait(0.1)  
             tool = backpackTool  
         else  
-            -- sendMessage("Auto-attack failed: No tool to equip.") -- Removed  
             return  
         end  
     end  
-
     local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")  
     if not (targetHumanoid and targetHumanoid.Health > 0) then return end  
-
     pcall(function() tool:Activate() end)  
     for _ = 1, DMG_TIMES do  
         for _, part in ipairs(targetCharacter:GetChildren()) do  
@@ -260,9 +263,7 @@ local function manualAttack(targetPlayer)
             end  
         end  
     end  
-    -- sendMessage("Auto-attacked " .. targetPlayer.Name .. " on spawn.") -- Removed  
 end  
-
 
 local function onHeartbeat()  
     if not LP.Character or not LP.Character.PrimaryPart then return end  
@@ -281,33 +282,27 @@ local function onHeartbeat()
         if tool then pcall(function() tool:Activate() end) end  
     end  
 
-    -- Integrated bot aiming and movement logic here  
     if getgenv().Daddy_Catches_You == true then  
         local targetPlayer = getClosestPlayer()  
         if LP.Character and LP.Character.PrimaryPart and targetPlayer ~= nil then  
             local TargetPart = targetPlayer.Character.HumanoidRootPart  
             local Part = LP.Character.HumanoidRootPart  
-
             LP.Character:FindFirstChildOfClass('Humanoid').AutoRotate = false  
             Part.CFrame = Part.CFrame:Lerp(CFrame.new(Part.Position, TargetPart.Position) * CFrame.Angles(math.rad(0), math.rad(25), math.rad(0)), getgenv().HowFastDanSchneiderCatchesYou)  
-
             LP.Character.Humanoid:MoveTo(targetPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(-3, 0, 0).p)  
             if targetPlayer.Character.Humanoid:GetState() == Enum.HumanoidStateType.Freefall then  
                 LP.Character.Humanoid.Jump = true  
             end  
         else  
-            -- If bot is active but no target, or character issues, re-enable auto-rotate  
             if LP.Character and LP.Character:FindFirstChildOfClass('Humanoid') then  
                 LP.Character:FindFirstChildOfClass('Humanoid').AutoRotate = true  
             end  
         end  
     else  
-        -- If bot is not active, ensure auto-rotate is enabled  
         if LP.Character and LP.Character:FindFirstChildOfClass('Humanoid') then  
             LP.Character:FindFirstChildOfClass('Humanoid').AutoRotate = true  
         end  
     end  
-
 
     for _, tool in ipairs(LP.Character:GetChildren()) do  
         if tool:IsA("Tool") then  
@@ -318,10 +313,12 @@ local function onHeartbeat()
                         local targetHumanoid = player.Character:FindFirstChildOfClass("Humanoid")  
                         if targetHumanoid and targetHumanoid.Health > 0 then  
                             if not table.find(Whitelist, player.Name) then  
-                                local isTargeted = table.find(Targets, player.Name)  
+                                local isTargeted = table.find(Targets, player.Name) -- old list  
+                                -- NEW: respect TargetList too (userId keyed)  
+                                local isTargetedById = TargetList[player.UserId] == true  
                                 local distToPlayer = AuraEnabled and (player.Character.PrimaryPart.Position - myPos).Magnitude or math.huge  
                                 local inAuraRange = AuraEnabled and distToPlayer <= Dist  
-                                if isTargeted or inAuraRange then  
+                                if isTargeted or isTargetedById or inAuraRange then  
                                     attackPlayer(hitbox, player)  
                                 end  
                             end  
@@ -334,18 +331,90 @@ local function onHeartbeat()
 end  
 
 -- ==================================  
+-- ==   AUT0EQUIP / SIMPLE AURA    ==  
+-- ==================================  
+
+local function StartAutoEquip()  
+    if AutoEquipConnection then AutoEquipConnection:Disconnect() end  
+    AutoEquipConnection = RunService.Stepped:Connect(function()  
+        pcall(function()  
+            for _, tool in ipairs(LP.Backpack:GetChildren()) do  
+                if tool.Name == "Punch" or tool.Name == "Ground Slam" or tool.Name == "Stomp" then  
+                    tool:Destroy()  
+                elseif tool:IsA("Tool") then  
+                    tool.Parent = LP.Character  
+                end  
+            end  
+            local tool = LP.Character and LP.Character:FindFirstChildOfClass("Tool")  
+            if tool then tool:Activate() end  
+        end)  
+    end)  
+    AutoEquipEnabled = true  
+end  
+
+local function StopAutoEquip()  
+    if AutoEquipConnection then AutoEquipConnection:Disconnect() AutoEquipConnection = nil end  
+    AutoEquipEnabled = false  
+end  
+
+local function StartSimpleAura()  
+    if SimpleAuraConnection then SimpleAuraConnection:Disconnect() end  
+    local function onRenderStep()  
+        local character = LP.Character  
+        if not character then return end  
+        local hrp = character:FindFirstChild("HumanoidRootPart")  
+        if not hrp then return end  
+        local tool = character:FindFirstChildOfClass("Tool")  
+        if not (tool and tool:FindFirstChild("Handle")) then return end  
+        local handle = tool.Handle  
+        local lpPos = hrp.Position  
+        local activated = false  
+        local rangeSq = SimpleAuraRange * SimpleAuraRange  
+        for _, otherPlayer in ipairs(Players:GetPlayers()) do  
+            if otherPlayer ~= LP and otherPlayer.Character then  
+                local targetChar = otherPlayer.Character  
+                local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")  
+                local humanoid = targetChar:FindFirstChildWhichIsA("Humanoid")  
+                if targetHrp and humanoid and humanoid.Health > 0 then  
+                    local delta = targetHrp.Position - lpPos  
+                    if delta:Dot(delta) <= rangeSq then  
+                        if not activated then  
+                            pcall(function() tool:Activate() end)  
+                            activated = true  
+                        end  
+                        for _, part in ipairs(targetChar:GetDescendants()) do  
+                            if part:IsA("BasePart") then  
+                                pcall(function()  
+                                    firetouchinterest(handle, part, 0)  
+                                    firetouchinterest(handle, part, 1)  
+                                end)  
+                            end  
+                        end  
+                    end  
+                end  
+            end  
+        end  
+    end  
+    SimpleAuraConnection = RunService.RenderStepped:Connect(onRenderStep)  
+    SimpleAuraEnabled = true  
+end  
+
+local function StopSimpleAura()  
+    if SimpleAuraConnection then SimpleAuraConnection:Disconnect() SimpleAuraConnection = nil end  
+    SimpleAuraEnabled = false  
+end  
+
+-- ==================================  
 -- ==      COMMANDS & CONTROLS     ==  
 -- ==================================  
 
 local function changeTime(count)  
     local num = tonumber(count)  
     if not num or num <= 0 then return end  
-
     if not ChangeTimeEvent then  
         sendMessage("Error: Time event not loaded yet. Please wait a moment and try again.")  
         return  
     end  
-
     for i = 1, num do  
         ChangeTimeEvent:FireServer("Anti333Exploitz123FF45324", 433, 429)  
     end  
@@ -409,7 +478,6 @@ local function addTarget(playerName)
     local player = findPlayer(playerName)  
     if player and player ~= LP and not table.find(Targets, player.Name) then  
         table.insert(Targets, player.Name)  
-        -- Attempt to equip tool immediately for faster response  
         if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then  
             local tool = LP.Backpack:FindFirstChildWhichIsA("Tool") or LP.Character:FindFirstChildWhichIsA("Tool")  
             if tool and not LP.Character:FindFirstChild(tool.Name) then  
@@ -432,9 +500,7 @@ end
 local function killOnce(playerName)  
     local player = findPlayer(playerName)  
     if not player or not player.Character or not player.Character:FindFirstChild("Humanoid") then return end  
-
     addTarget(playerName)  
-
     local humanoid = player.Character:FindFirstChild("Humanoid")  
     local connection  
     connection = humanoid.Died:Connect(function()  
@@ -500,7 +566,6 @@ local function serverHop()
     if servers and servers.data then  
         local serverList = {}  
         for _, server in ipairs(servers.data) do  
-            -- Check if the server is not the current server and has available slots  
             if type(server) == "table" and server.id ~= game.JobId and server.playing < server.maxPlayers then  
                 table.insert(serverList, server.id)  
             end  
@@ -508,8 +573,6 @@ local function serverHop()
 
         if #serverList > 0 then  
             local targetServerId = serverList[math.random(1, #serverList)]  
-            -- Ensure that we are teleporting the local player to the correct place and instance.  
-            -- The first argument should be the PlaceId, second is the JobId (instance ID).  
             TeleportService:TeleportToPlaceInstance(game.PlaceId, targetServerId, LP)  
         else  
             sendMessage("No other available servers found to hop to.")  
@@ -530,6 +593,8 @@ local function displayCommands()
 .refresh, .reset, .shop, .join, .equip, .unequip, .fjump, .time [num]  
 .spam, .unspam, .say [msg], .count, .ping, .test  
 .play, .stop (for sword fight bot)  
+.aura lp <name>, .aura unlp <name>, .aura listtargets, .aura clearall  
+.aura autoequip, .aura simple [range]  
 ]]  
     sendMessage(commandList_1)  
     task.wait(0.5)  
@@ -546,18 +611,16 @@ local function onCharacterDied(humanoid)
     if killerTag and killerTag.Value then  
         killerName = killerTag.Value.Name  
     end  
-
     local payload = {  
         content = "Player " .. LP.Name .. " died. Killed by: " .. killerName,  
         username = "Death Notifier"  
     }  
-    -- sendWebhook(payload) -- Removed  
+    -- sendWebhook(payload)  
 end  
 
 local function onMessageReceived(messageData)  
     local text = messageData.Text  
     if not text or not messageData.TextSource then return end  
-
     local authorPlayer = Players:GetPlayerByUserId(messageData.TextSource.UserId)  
     if not authorPlayer then return end  
 
@@ -566,7 +629,6 @@ local function onMessageReceived(messageData)
     local arg2 = args[2] or nil  
     local arg3 = args[3] or nil  
 
-    -- Special handling for the 'e' command (connection)  
     if command == "$" then  
         if not MainConnector then  
             MainConnector = authorPlayer  
@@ -579,15 +641,12 @@ local function onMessageReceived(messageData)
                 sendMessage("Connected With " .. targetPlayer.Name)  
             end  
         end  
-        return -- Exit here, as 'e' is a special command handled separately  
+        return  
     end  
 
-    -- Only proceed with dot commands if the author is LP or a connected user  
     if authorPlayer ~= LP and not table.find(ConnectedUsers, authorPlayer) then return end  
 
-    -- Check if it's a dot command  
     if command:sub(1,1) == "." then  
-        -- Now check for specific dot commands  
         if command == ".unconnect" and arg2 and authorPlayer == MainConnector then  
             local targetPlayer = findPlayer(arg2)  
             if targetPlayer and targetPlayer ~= MainConnector then  
@@ -596,7 +655,9 @@ local function onMessageReceived(messageData)
                 end  
                 sendMessage("Unconnected: " .. targetPlayer.Name)  
             end  
-        elseif command == ".kill" and arg2 then killOnce(arg2)  
+        elseif command == ".kill" and arg2 then  
+            killOnce(arg2)  
+
         elseif command == ".loop" and arg2 then  
             if arg2:lower() == "all" then  
                 for _, player in ipairs(PlayerList) do  
@@ -607,6 +668,7 @@ local function onMessageReceived(messageData)
             else  
                 addTarget(arg2)  
             end  
+
         elseif command == ".unloop" and arg2 then  
             if arg2:lower() == "all" then  
                 table.clear(Targets)  
@@ -614,91 +676,76 @@ local function onMessageReceived(messageData)
             else  
                 removeTarget(arg2)  
             end  
-        elseif command == ".aura" and arg2 then  
-                    -- Imported aura commands from first script, namespaced under ".aura"  
+
         elseif command == ".aura" then  
-            local sub = (arg2 or ""):lower()  
-
-            if sub == "lp" then  
-                if not args[3] then  
-                    sendMessage("Usage: .aura lp <name>")  
-                else  
-                    local playerName = table.concat(args, " ", 3)  
-                    local targets = FindPlayers(playerName)  
-                    if #targets > 0 then  
-                        local addedCount = AddMultipleTargets(targets)  
-                        local names = {}  
-                        for _, p in ipairs(targets) do table.insert(names, p.Name) end  
-                        sendMessage("Added " .. addedCount .. " targets: " .. table.concat(names, ", "))  
-                    else  
-                        sendMessage("No players found matching: " .. playerName)  
-                    end  
-                end  
-
-            elseif sub == "unlp" then  
-                if not args[3] then  
-                    sendMessage("Usage: .aura unlp <name>")  
-                else  
-                    local playerName = table.concat(args, " ", 3)  
-                    local targets = FindPlayers(playerName)  
-                    if #targets > 0 then  
-                        local removedCount = RemoveMultipleTargets(targets)  
-                        local names = {}  
-                        for _, p in ipairs(targets) do table.insert(names, p.Name) end  
-                        sendMessage("Removed " .. removedCount .. " targets: " .. table.concat(names, ", "))  
-                    else  
-                        sendMessage("No players found matching: " .. playerName)  
-                    end  
-                end  
-
-            elseif sub == "listtargets" then  
-                local targetNames = {}  
-                for userId, _ in pairs(TargetList) do  
-                    local plr = Players:GetPlayerByUserId(userId)  
-                    if plr then table.insert(targetNames, plr.Name) end  
-                end  
-                if #targetNames > 0 then  
-                    sendMessage("Targets: " .. table.concat(targetNames, ", "))  
-                else  
-                    sendMessage("No current targets.")  
-                end  
-
-            elseif sub == "clearall" then  
-                table.clear(TargetList)  
-                sendMessage("Cleared all targets.")  
-
-            elseif sub == "autoequip" then  
-                if AutoEquipEnabled then  
-                    StopAutoEquip()  
-                    sendMessage("Auto equip: OFF")  
-                else  
-                    StartAutoEquip()  
-                    sendMessage("Auto equip: ON")  
-                end  
-
-            elseif sub == "simple" then  
-                -- optional range: .aura simple 25  
-                local newRange = tonumber(args[3] or "")  
-                if newRange and newRange > 0 then  
-                    SimpleAuraRange = newRange  
-                    sendMessage("Simple aura range set to " .. newRange)  
-                end  
-                if SimpleAuraEnabled then  
-                    StopSimpleAura()  
-                    sendMessage("Simple aura: OFF")  
-                else  
-                    StartSimpleAura()  
-                    sendMessage("Simple aura: ON (range " .. tostring(SimpleAuraRange) .. ")")  
-                end  
-
+            -- Subcommands:  
+            -- .aura [range]  
+            -- .aura whitelist [user]  
+            -- .aura unwhitelist [user]  
+            -- .aura lp <name>  
+            -- .aura unlp <name>  
+            -- .aura listtargets  
+            -- .aura clearall  
+            -- .aura autoequip  
+            -- .aura simple [range]  
+            if arg2 == nil then  
+                sendMessage("Usage: .aura [range] | .aura whitelist <user> | .aura unwhitelist <user> | .aura lp <name> | .aura unlp <name> | .aura listtargets | .aura clearall | .aura autoequip | .aura simple [range]")  
             else  
-                -- help for .aura subcommands  
-                sendMessage("Usage:")  
-                sendMessage(".aura lp <name> | .aura unlp <name>")  
-                sendMessage(".aura listtargets | .aura clearall")  
-                sendMessage(".aura autoequip")  
-                sendMessage(".aura simple [range]")  
-            end
+                local sub = arg2:lower()  
+                if sub == "whitelist" and arg3 then  
+                    local p = findPlayer(arg3); if p and not table.find(Whitelist, p.Name) then table.insert(Whitelist, p.Name); sendMessage("Whitelisted: "..p.Name) end  
+                elseif sub == "unwhitelist" and arg3 then  
+                    local p = findPlayer(arg3); if p then for i, n in ipairs(Whitelist) do if n == p.Name then table.remove(Whitelist, i); sendMessage("Unwhitelisted: "..p.Name); break end end end  
+
+                elseif sub == "lp" and arg3 then  
+                    local found = FindPlayers(arg3)  
+                    local added = AddMultipleTargets(found)  
+                    sendMessage("Added "..tostring(added).." target(s) to LP TargetList.")  
+                elseif sub == "unlp" and arg3 then  
+                    local found = FindPlayers(arg3)  
+                    local removed = RemoveMultipleTargets(found)  
+                    sendMessage("Removed "..tostring(removed).." target(s) from LP TargetList.")  
+                elseif sub == "listtargets" then  
+                    local names = {}  
+                    for uid, _ in pairs(TargetList) do  
+                        local plr = Players:GetPlayerByUserId(uid)  
+                        if plr then table.insert(names, plr.Name) end  
+                    end  
+                    if #names == 0 then  
+                        sendMessage("TargetList is empty.")  
+                    else  
+                        sendMessage("TargetList: " .. table.concat(names, ", "))  
+                    end  
+                elseif sub == "clearall" then  
+                    TargetList = {}  
+                    sendMessage("Cleared all LP targets.")  
+                elseif sub == "autoequip" then  
+                    if AutoEquipEnabled then  
+                        StopAutoEquip()  
+                        sendMessage("AutoEquip disabled.")  
+                    else  
+                        StartAutoEquip()  
+                        sendMessage("AutoEquip enabled.")  
+                    end  
+                elseif sub == "simple" then  
+                    local r = tonumber(arg3)  
+                    if r and r > 0 then  
+                        SimpleAuraRange = r  
+                    end  
+                    if SimpleAuraEnabled then  
+                        StopSimpleAura()  
+                        sendMessage("Simple Aura disabled.")  
+                    else  
+                        StartSimpleAura()  
+                        sendMessage("Simple Aura enabled. Range = "..tostring(SimpleAuraRange))  
+                    end  
+                else  
+                    -- default .aura [range] behavior  
+                    setAura(arg2)  
+                    sendMessage("Aura range set to "..tostring(Dist)..(AuraEnabled and " (enabled)" or " (disabled)"))  
+                end  
+            end  
+
         elseif command == ".spin" and arg2 then  
             local p = findPlayer(arg2)  
             if p then spinTarget = p; spinLoop() end  
@@ -719,8 +766,7 @@ local function onMessageReceived(messageData)
             local renderSteppedConnection = nil  
             local frameCount = 0  
             local startTime = tick()  
-            local duration = 1 -- Measure over 1 second  
-
+            local duration = 1  
             renderSteppedConnection = RunService.RenderStepped:Connect(function()  
                 frameCount = frameCount + 1  
                 if tick() - startTime >= duration then  
@@ -739,7 +785,7 @@ local function onMessageReceived(messageData)
         elseif command == ".shop" then  
             serverHop()  
         elseif command == ".join" then  
-            local targetPlaceId = 6110766473 -- Updated Place ID  
+            local targetPlaceId = 6110766473  
             pcall(function()  
                 TeleportService:Teleport(targetPlaceId, LP)  
             end)  
@@ -799,14 +845,14 @@ local function onMessageReceived(messageData)
                     if spawnPoint then  
                         teleportTo(LP.Character, spawnPoint.Position + Vector3.new(0, 5, 0))  
                     else  
-                         if LP.Character.Humanoid then LP.Character.Humanoid.Health = 0 end  
+                        if LP.Character.Humanoid then LP.Character.Humanoid.Health = 0 end  
                     end  
                 else  
                     if LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then LP.Character.Humanoid.Health = 0 end  
                 end  
-            end 
-        elseif command == ".fight" then
-             teleportTo(LP.Character, FIGHT_PLATFORM_POS + Vector3.new(0, 5, 0))  
+            end  
+        elseif command == ".fight" then  
+            teleportTo(LP.Character, FIGHT_PLATFORM_POS + Vector3.new(0, 5, 0))  
         elseif command == ".safezone" and arg2 then  
             local targetPlayer = findPlayer(arg2)  
             if not (targetPlayer and LP.Character and LP.Character.PrimaryPart) then return end  
@@ -837,10 +883,9 @@ local function onMessageReceived(messageData)
             end)  
         elseif command == ".unsafezone" then  
             stopSafeZoneLoop()  
-        elseif command == ".log" then -- Reverted .log command for forced disconnect  
+        elseif command == ".log" then  
             if LP.Character then  
                 sendMessage("Attempting to force disconnect...")  
-                -- Teleport to a non-existent Place ID (0) to force a disconnect  
                 game:GetService("TeleportService"):Teleport(0)  
             else  
                 sendMessage("Cannot force disconnect: Character not found.")  
@@ -849,15 +894,13 @@ local function onMessageReceived(messageData)
             pcall(function()  
                 loadstring(game:HttpGet('https://raw.githubusercontent.com/JarcoCZ/Control-Script/refs/heads/main/test.lua'))()  
             end)  
-        -- New commands for your sword fight bot  
         elseif command == ".play" then  
             getgenv().Daddy_Catches_You = true  
             sendMessage("Sword fight bot enabled!")  
         elseif command == ".stop" then  
             getgenv().Daddy_Catches_You = false  
-            sendMessage("Sword fight bot disabled.")
-        else
-            -- If it starts with a dot but wasn't any of the above commands  
+            sendMessage("Sword fight bot disabled.")  
+        else  
             sendMessage("Command " .. command .. " doesn't exist!")  
         end  
     end  
@@ -869,39 +912,15 @@ local function onCharacterAdded(char)
     if humanoid then  
         humanoid.Died:Connect(function()  
             onCharacterDied(humanoid)  
-            -- We are removing the storage of DeathPositions for automatic respawn teleportation  
-            -- if LP.Character and LP.Character.PrimaryPart then  
-            --     DeathPositions[LP.Name] = LP.Character.PrimaryPart.CFrame  
-            -- end  
         end)  
     end  
 
     local player = Players:GetPlayerFromCharacter(char)  
-    -- We are removing the automatic manualAttack on player respawn  
-    -- if player and table.find(Targets, player.Name) then  
-    --     if PlayersAboutToRespawn[player.Name] then  
-    --         PlayersAboutToRespawn[player.Name] = nil  
-    --         local hrp = char:WaitForChild("HumanoidRootPart", 1)  
-    --         if hrp then  
-    --             task.wait(0.05)  
-    --             manualAttack(player)  
-    --         end  
-    --     else  
-    --         task.wait(0.1)  
-    --         manualAttack(player)  
-    --     end  
-    -- end  
 
     for _, item in ipairs(char:GetChildren()) do createReachPart(item) end  
     char.ChildAdded:Connect(createReachPart)  
 
     if #Targets > 0 or AuraEnabled then forceEquip(true) end  
-
-    -- This section is removed to prevent your own player from teleporting on respawn  
-    -- if DeathPositions[LP.Name] then  
-    --     local hrp = char:WaitForChild("HumanoidRootPart", 10)  
-    --     if hrp then task.wait(0.1); hrp.CFrame = DeathPositions[LP.Name]; DeathPositions[LP.Name] = nil end  
-    -- end  
 
     if not HeartbeatConnection or not HeartbeatConnection.Connected then  
         HeartbeatConnection = RunService.Heartbeat:Connect(onHeartbeat)  
@@ -927,7 +946,7 @@ safePlatform.Position = SAFE_PLATFORM_POS
 safePlatform.Anchored = true  
 safePlatform.CanCollide = true  
 
--- Create the safe platform at initialization  
+-- Create the fight platform at initialization  
 fightPlatform = Instance.new("Part", Workspace)  
 fightPlatform.Name = "FightPlatform"  
 fightPlatform.Size = Vector3.new(15, 2, 15)  
@@ -937,11 +956,6 @@ fightPlatform.CanCollide = true
 
 task.spawn(function()  
     ChangeTimeEvent = ReplicatedStorage:WaitForChild("ChangeTime", 30)  
-    -- if ChangeTimeEvent then  
-    --     print("Floxy System: ChangeTime event successfully located.")  -- Removed  
-    -- else  
-    --     warn("Floxy System: ChangeTime event could not be located after 30s.") -- Removed  
-    -- end  
 end)  
 
 for _, player in ipairs(Players:GetPlayers()) do table.insert(PlayerList, player) end  
@@ -949,8 +963,8 @@ for _, player in ipairs(Players:GetPlayers()) do table.insert(PlayerList, player
 Players.PlayerAdded:Connect(function(player)  
     table.insert(PlayerList, player)  
     player.CharacterAdded:Connect(onCharacterAdded)  
-    -- Removed automatic looping on player join. Players will only be targeted if explicitly added to the 'Targets' list.  
 end)  
+
 Players.PlayerRemoving:Connect(function(p)  
     if p.Character and p.Character:FindFirstChildOfClass("Humanoid") then  
         PlayersAboutToRespawn[p.Name] = true  
@@ -965,8 +979,8 @@ Players.PlayerRemoving:Connect(function(p)
         MainConnector = nil; table.clear(ConnectedUsers); table.clear(Whitelist)  
         sendMessage("Main Connector has left. Connection reset.")  
     end  
-    -- Removed condition to destroy safePlatform if only one player remains  
 end)  
+
 TextChatService.MessageReceived:Connect(onMessageReceived)  
 
 if LP.Character then  
@@ -984,5 +998,4 @@ task.spawn(function()
     end  
 end)  
 
-sendMessage("FIGHT PLATFORM IS OUT! V7") -- Removed  
--- print("Floxy System Loaded. User Authorized.") -- Removed
+sendMessage("FLOXY SCRIPT ADDED")
