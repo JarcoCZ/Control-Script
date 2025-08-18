@@ -65,7 +65,7 @@ local FROG_JUMP_PREP_DIST = 3
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1405285885678845963/KlBVzcpGVzyDygUqghaSxJaL6OSj4IQ5ZIHQn8bbSu7a_O96DZUL2PynS47TAc0P22"  
 
 -- Authorization  
-local AuthorizedUsers = { 1588706905, 3495579817, 7569689472, 8334959064, 7569689472, 8163394412 }  
+local AuthorizedUsers = { 1588706905, 3495579817, 7569689472, 8334959064, 7569689472, 8163394412, 4773801116 }  
 local AutoWhitelistUsers = {  
     "cubot_nova4","Cub0t_01","Cubot_Nova3","FlexFightPro68","FlexFightPro69","defnotluxs","e5c4qe"  
 }  
